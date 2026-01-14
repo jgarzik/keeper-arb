@@ -1,0 +1,149 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
+  background: #0d1117;
+  color: #c9d1d9;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  color: #58a6ff;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+h2 {
+  color: #8b949e;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-running { background: #238636; color: #fff; }
+.status-paused { background: #da3633; color: #fff; }
+.status-pending { background: #9e6a03; color: #fff; }
+.status-completed { background: #238636; color: #fff; }
+.status-failed { background: #da3633; color: #fff; }
+
+.btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn:hover {
+  background: #30363d;
+}
+
+.btn-danger {
+  border-color: #da3633;
+  color: #f85149;
+}
+
+.btn-success {
+  border-color: #238636;
+  color: #3fb950;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #30363d;
+}
+
+th {
+  color: #8b949e;
+  font-weight: 600;
+}
+
+.value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+.label {
+  color: #8b949e;
+  font-size: 0.75rem;
+}
+
+.positive { color: #3fb950; }
+.negative { color: #f85149; }
+
+a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 8px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+
+.tab.active {
+  background: #21262d;
+  color: #c9d1d9;
+}
+
+.tab:hover {
+  color: #c9d1d9;
+}

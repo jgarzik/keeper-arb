@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  keeper-arb:
+    build: .
+    container_name: keeper-arb
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - HEMI_RPC_URL=${HEMI_RPC_URL}
+      - ETH_RPC_URL=${ETH_RPC_URL}
+      - ARBITRAGE_PRIVATE_KEY=${ARBITRAGE_PRIVATE_KEY}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - MIN_SWAP_VCRED=${MIN_SWAP_VCRED:-100}
+      - MAX_SWAP_VCRED_CAP=${MAX_SWAP_VCRED_CAP:-100000}
+      - MIN_PROFIT_VCRED=${MIN_PROFIT_VCRED:-0}
+      - RECONCILE_INTERVAL_MS=${RECONCILE_INTERVAL_MS:-30000}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,340 @@
+import { type Address } from 'viem';
+import { type Clients, getPublicClient, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
+import { type Config } from '../config.js';
+import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
+import { type TokenId, requireTokenAddress, getToken } from '../tokens.js';
+import { sushiSwapHemi, sushiSwapEthereum } from '../providers/sushiSwap.js';
+import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
+import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
+import { type Cycle, createStep, updateStep, updateCycleAmounts, type CycleState } from '../db.js';
+import { diag, logMoney } from '../logging.js';
+
+const MAX_UINT256 = 2n ** 256n - 1n;
+
+export interface StepResult {
+  success: boolean;
+  txHash?: `0x${string}`;
+  error?: string;
+  newState?: CycleState;
+}
+
+// Ensure token approval for a spender
+async function ensureApproval(
+  clients: Clients,
+  chainId: number,
+  token: Address,
+  spender: Address,
+  amount: bigint
+): Promise<void> {
+  const allowance = await getTokenAllowance(clients, chainId, token, spender);
+  if (allowance < amount) {
+    diag.info('Approving token', { chainId, token, spender });
+    const hash = await approveToken(clients, chainId, token, spender, MAX_UINT256);
+    // Wait for confirmation
+    const publicClient = getPublicClient(clients, chainId);
+    await publicClient.waitForTransactionReceipt({ hash });
+  }
+}
+
+// Execute Hemi swap: VCRED -> X
+export async function executeHemiSwap(
+  clients: Clients,
+  config: Config,
+  cycle: Cycle
+): Promise<StepResult> {
+  const token = cycle.token as TokenId;
+  const vcredIn = BigInt(cycle.vcredIn);
+  const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
+  const tokenAddress = requireTokenAddress(token, CHAIN_ID_HEMI);
+
+  // Check if already done by looking at balance
+  const tokenBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, tokenAddress);
+  if (cycle.xOut && tokenBalance >= BigInt(cycle.xOut) * 95n / 100n) {
+    diag.info('Hemi swap already completed', { cycleId: cycle.id });
+    return { success: true, newState: 'HEMI_SWAP_DONE' };
+  }
+
+  try {
+    // Get quote
+    const quote = await sushiSwapHemi.quoteExactIn(clients, vcredAddress, tokenAddress, vcredIn);
+    if (!quote) {
+      return { success: false, error: 'No swap quote available' };
+    }
+
+    // Ensure approval
+    await ensureApproval(clients, CHAIN_ID_HEMI, vcredAddress, quote.to!, vcredIn);
+
+    // Execute swap
+    const step = createStep(cycle.id, 'HEMI_SWAP', CHAIN_ID_HEMI);
+    const txHash = await sushiSwapHemi.execute(clients, quote);
+    updateStep(step.id, { txHash, status: 'submitted' });
+
+    // Wait for confirmation
+    const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    if (receipt.status === 'reverted') {
+      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+      return { success: false, txHash, error: 'Transaction reverted' };
+    }
+
+    updateStep(step.id, {
+      status: 'confirmed',
+      gasUsed: receipt.gasUsed,
+      gasPrice: receipt.effectiveGasPrice,
+    });
+
+    // Get actual output
+    const newBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, tokenAddress);
+    const xOut = newBalance - tokenBalance;
+    updateCycleAmounts(cycle.id, { xOut });
+
+    logMoney('HEMI_SWAP', {
+      cycleId: cycle.id,
+      token,
+      vcredIn: vcredIn.toString(),
+      xOut: xOut.toString(),
+      txHash,
+    });
+
+    return { success: true, txHash, newState: 'HEMI_SWAP_DONE' };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+// Execute bridge: X from Hemi -> Ethereum
+export async function executeBridgeOut(
+  clients: Clients,
+  config: Config,
+  cycle: Cycle
+): Promise<StepResult> {
+  const token = cycle.token as TokenId;
+  const tokenMeta = getToken(token);
+  const tokenAddress = requireTokenAddress(token, CHAIN_ID_HEMI);
+  const amount = BigInt(cycle.xOut ?? '0');
+
+  if (amount === 0n) {
+    return { success: false, error: 'No amount to bridge' };
+  }
+
+  try {
+    const bridge = tokenMeta.bridgeRouteOut === 'STARGATE_LZ'
+      ? stargateHemiToEth
+      : hemiTunnelHemiToEth;
+
+    const step = createStep(cycle.id, 'BRIDGE_OUT', CHAIN_ID_HEMI);
+    const bridgeTx = await bridge.send(clients, tokenAddress, amount, clients.address);
+
+    updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
+
+    // Wait for source tx confirmation
+    const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash });
+
+    if (receipt.status === 'reverted') {
+      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+      return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
+    }
+
+    updateStep(step.id, {
+      status: 'confirmed',
+      gasUsed: receipt.gasUsed,
+      gasPrice: receipt.effectiveGasPrice,
+    });
+
+    logMoney('BRIDGE_OUT', {
+      cycleId: cycle.id,
+      token,
+      amount: amount.toString(),
+      provider: bridge.name,
+      txHash: bridgeTx.txHash,
+    });
+
+    // Determine next state based on bridge type
+    const nextState: CycleState = tokenMeta.bridgeRouteOut === 'HEMI_TUNNEL'
+      ? 'BRIDGE_OUT_PROVE_REQUIRED'
+      : 'BRIDGE_OUT_SENT';
+
+    return { success: true, txHash: bridgeTx.txHash, newState: nextState };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+// Execute Ethereum swap: X -> USDC
+export async function executeEthSwap(
+  clients: Clients,
+  config: Config,
+  cycle: Cycle
+): Promise<StepResult> {
+  const token = cycle.token as TokenId;
+  const tokenMeta = getToken(token);
+  const tokenEth = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
+  const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
+
+  if (!tokenEth) {
+    return { success: false, error: 'Token not available on Ethereum' };
+  }
+
+  // Get current balance of token on Ethereum
+  const tokenBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, tokenEth);
+  if (tokenBalance === 0n) {
+    return { success: false, error: 'No token balance on Ethereum' };
+  }
+
+  // Check if already done
+  const usdcBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, usdcEth);
+  if (cycle.usdcOut && usdcBalance >= BigInt(cycle.usdcOut) * 95n / 100n) {
+    diag.info('Ethereum swap already completed', { cycleId: cycle.id });
+    return { success: true, newState: 'ETH_SWAP_DONE' };
+  }
+
+  try {
+    const quote = await sushiSwapEthereum.quoteExactIn(clients, tokenEth, usdcEth, tokenBalance);
+    if (!quote) {
+      return { success: false, error: 'No swap quote available' };
+    }
+
+    await ensureApproval(clients, CHAIN_ID_ETHEREUM, tokenEth, quote.to!, tokenBalance);
+
+    const step = createStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
+    const txHash = await sushiSwapEthereum.execute(clients, quote);
+    updateStep(step.id, { txHash, status: 'submitted' });
+
+    const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    if (receipt.status === 'reverted') {
+      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+      return { success: false, txHash, error: 'Transaction reverted' };
+    }
+
+    updateStep(step.id, {
+      status: 'confirmed',
+      gasUsed: receipt.gasUsed,
+      gasPrice: receipt.effectiveGasPrice,
+    });
+
+    const newUsdcBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, usdcEth);
+    const usdcOut = newUsdcBalance - usdcBalance;
+    updateCycleAmounts(cycle.id, { usdcOut });
+
+    logMoney('ETH_SWAP', {
+      cycleId: cycle.id,
+      token,
+      tokenIn: tokenBalance.toString(),
+      usdcOut: usdcOut.toString(),
+      txHash,
+    });
+
+    return { success: true, txHash, newState: 'ETH_SWAP_DONE' };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+// Execute bridge: USDC from Ethereum -> Hemi
+export async function executeBridgeBack(
+  clients: Clients,
+  config: Config,
+  cycle: Cycle
+): Promise<StepResult> {
+  const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
+  const usdcBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, usdcEth);
+
+  if (usdcBalance === 0n) {
+    return { success: false, error: 'No USDC to bridge back' };
+  }
+
+  try {
+    const step = createStep(cycle.id, 'BRIDGE_BACK', CHAIN_ID_ETHEREUM);
+    const bridgeTx = await stargateEthToHemi.send(clients, usdcEth, usdcBalance, clients.address);
+
+    updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
+
+    const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash });
+
+    if (receipt.status === 'reverted') {
+      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+      return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
+    }
+
+    updateStep(step.id, {
+      status: 'confirmed',
+      gasUsed: receipt.gasUsed,
+      gasPrice: receipt.effectiveGasPrice,
+    });
+
+    logMoney('BRIDGE_BACK', {
+      cycleId: cycle.id,
+      amount: usdcBalance.toString(),
+      txHash: bridgeTx.txHash,
+    });
+
+    return { success: true, txHash: bridgeTx.txHash, newState: 'USDC_BRIDGE_BACK_SENT' };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+// Execute closing swap: USDC -> VCRED on Hemi
+export async function executeCloseSwap(
+  clients: Clients,
+  config: Config,
+  cycle: Cycle
+): Promise<StepResult> {
+  const usdcHemi = requireTokenAddress('USDC', CHAIN_ID_HEMI);
+  const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
+
+  const usdcBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, usdcHemi);
+  if (usdcBalance === 0n) {
+    return { success: false, error: 'No USDC on Hemi to swap' };
+  }
+
+  // Check if already done
+  const vcredBefore = await getTokenBalance(clients, CHAIN_ID_HEMI, vcredAddress);
+
+  try {
+    const quote = await sushiSwapHemi.quoteExactIn(clients, usdcHemi, vcredAddress, usdcBalance);
+    if (!quote) {
+      return { success: false, error: 'No swap quote available' };
+    }
+
+    await ensureApproval(clients, CHAIN_ID_HEMI, usdcHemi, quote.to!, usdcBalance);
+
+    const step = createStep(cycle.id, 'CLOSE_SWAP', CHAIN_ID_HEMI);
+    const txHash = await sushiSwapHemi.execute(clients, quote);
+    updateStep(step.id, { txHash, status: 'submitted' });
+
+    const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    if (receipt.status === 'reverted') {
+      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+      return { success: false, txHash, error: 'Transaction reverted' };
+    }
+
+    updateStep(step.id, {
+      status: 'confirmed',
+      gasUsed: receipt.gasUsed,
+      gasPrice: receipt.effectiveGasPrice,
+    });
+
+    const vcredAfter = await getTokenBalance(clients, CHAIN_ID_HEMI, vcredAddress);
+    const vcredOut = vcredAfter - vcredBefore;
+    updateCycleAmounts(cycle.id, { vcredOut });
+
+    logMoney('CLOSE_SWAP', {
+      cycleId: cycle.id,
+      usdcIn: usdcBalance.toString(),
+      vcredOut: vcredOut.toString(),
+      txHash,
+    });
+
+    return { success: true, txHash, newState: 'HEMI_CLOSE_SWAP_DONE' };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}

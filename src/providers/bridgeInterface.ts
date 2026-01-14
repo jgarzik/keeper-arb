@@ -1,0 +1,58 @@
+import { type Address } from 'viem';
+import { type Clients } from '../wallet.js';
+
+export type BridgeStatus =
+  | 'pending'
+  | 'sent'
+  | 'prove_required'
+  | 'proved'
+  | 'finalize_required'
+  | 'finalized'
+  | 'completed'
+  | 'failed';
+
+export interface BridgeTransaction {
+  provider: string;
+  fromChainId: number;
+  toChainId: number;
+  token: Address;
+  amount: bigint;
+  txHash: `0x${string}`;
+  status: BridgeStatus;
+  // For Hemi tunnel
+  withdrawalHash?: `0x${string}`;
+  proveHash?: `0x${string}`;
+  finalizeHash?: `0x${string}`;
+}
+
+export interface BridgeProvider {
+  name: string;
+  fromChainId: number;
+  toChainId: number;
+
+  // Estimate bridge fee
+  estimateFee(clients: Clients, token: Address, amount: bigint): Promise<bigint>;
+
+  // Initiate bridge transfer
+  send(
+    clients: Clients,
+    token: Address,
+    amount: bigint,
+    recipient: Address
+  ): Promise<BridgeTransaction>;
+
+  // Check status of a bridge transaction
+  getStatus(clients: Clients, tx: BridgeTransaction): Promise<BridgeStatus>;
+
+  // For multi-step bridges (Hemi tunnel)
+  prove?(clients: Clients, tx: BridgeTransaction): Promise<`0x${string}`>;
+  finalize?(clients: Clients, tx: BridgeTransaction): Promise<`0x${string}`>;
+
+  // Detect arrival of funds on destination chain
+  detectArrival(
+    clients: Clients,
+    token: Address,
+    minAmount: bigint,
+    sinceBlock?: bigint
+  ): Promise<boolean>;
+}

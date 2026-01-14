@@ -1,0 +1,62 @@
+import { type Chain } from 'viem';
+
+export const CHAIN_ID_HEMI = 43111;
+export const CHAIN_ID_ETHEREUM = 1;
+
+export const hemiMainnet: Chain = {
+  id: CHAIN_ID_HEMI,
+  name: 'Hemi',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://rpc.hemi.network/rpc'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Hemi Explorer',
+      url: 'https://explorer.hemi.xyz',
+    },
+  },
+};
+
+export const ethereumMainnet: Chain = {
+  id: CHAIN_ID_ETHEREUM,
+  name: 'Ethereum',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://eth.llamarpc.com'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Etherscan',
+      url: 'https://etherscan.io',
+    },
+  },
+};
+
+export function getChainById(chainId: number): Chain {
+  switch (chainId) {
+    case CHAIN_ID_HEMI:
+      return hemiMainnet;
+    case CHAIN_ID_ETHEREUM:
+      return ethereumMainnet;
+    default:
+      throw new Error(`Unknown chain ID: ${chainId}`);
+  }
+}
+
+export function getExplorerTxUrl(chainId: number, txHash: string): string {
+  const chain = getChainById(chainId);
+  return `${chain.blockExplorers?.default.url}/tx/${txHash}`;
+}
