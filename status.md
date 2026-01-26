@@ -20,10 +20,10 @@ All 9 phases implemented. Build passes. 45 unit tests pass. Lint clean.
 | SQLite DB | Done | cycles, steps, ledger tables |
 | Logging | Done | diag.log + money.log (JSONL) |
 | Wallet | Done | viem clients, nonce manager |
-| SushiSwap Eth | Done | Router: 0xd9e1cE17... |
-| SushiSwap Hemi | Placeholder | Need to discover router address |
+| SushiSwap Eth | Done | V2 Router: 0xd9e1cE17... |
+| SushiSwap Hemi | Done | V3 Router: 0x33d91116..., Quoter: 0x1400feFD... |
 | Uniswap Quoter | Done | V3 quoter for ref pricing |
-| Stargate Bridge | Partial | Need pool addresses for Hemi |
+| Stargate Bridge | Done | Hemi: 0x2F6F07CD..., LZ Endpoint: 30329 |
 | Hemi Tunnel | Done | OP-stack bridge, prove/finalize TBD |
 | Opportunity Detection | Done | Compare Hemi vs Eth prices |
 | Sizing Algorithm | Done | Binary search, tested |
@@ -36,11 +36,7 @@ All 9 phases implemented. Build passes. 45 unit tests pass. Lint clean.
 | Docker | Done | Dockerfile + compose |
 | Unit Tests | Done | 45 tests |
 
-## Addresses Needed
-- SushiSwap V3 router on Hemi
-- Stargate pool addresses for Hemi
-
-## To Run (after getting addresses)
+## To Run
 1. Copy .env.example to .env
 2. Fill in RPC URLs, private key, dashboard password
 3. `npm run build && npm run keeper`

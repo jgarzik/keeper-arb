@@ -9,16 +9,15 @@ import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
 
 // Stargate V2 contracts
-// These need to be discovered from Stargate docs for Hemi
 const STARGATE_ROUTER: Record<number, Address> = {
   [CHAIN_ID_ETHEREUM]: '0x77b2043768d28E9C9aB44E1aBfC95944bcE57931', // StargatePoolNative
-  [CHAIN_ID_HEMI]: '0x0000000000000000000000000000000000000000', // TBD - need to discover
+  [CHAIN_ID_HEMI]: '0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590', // StargatePoolNative on Hemi
 };
 
 // LayerZero Endpoint IDs
 const LZ_ENDPOINT_IDS: Record<number, number> = {
   [CHAIN_ID_ETHEREUM]: 30101,
-  [CHAIN_ID_HEMI]: 30351, // Hemi LayerZero endpoint ID (if available)
+  [CHAIN_ID_HEMI]: 30329, // Hemi LayerZero endpoint ID
 };
 
 const STARGATE_ABI = [

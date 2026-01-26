@@ -22,12 +22,12 @@ Cross-chain VCRED arbitrage keeper: Hemi (L2) <-> Ethereum (L1)
 - nonce manager, balance utils
 
 ### Phase 3: Swap Providers [DONE]
-- SushiSwap V2 (Ethereum)
-- SushiSwap placeholder (Hemi - needs router address)
+- SushiSwap V2 (Ethereum): Router 0xd9e1cE17...
+- SushiSwap V3 (Hemi): Router 0x33d91116..., Quoter 0x1400feFD...
 - Uniswap V3 quoter (reference pricing)
 
 ### Phase 4: Bridge Providers [DONE]
-- Stargate/LayerZero (ETH, hemiBTC)
+- Stargate/LayerZero: Hemi 0x2F6F07CD..., LZ Endpoint 30329
 - Hemi tunnel OP-stack (other tokens)
   - initiate -> prove -> finalize flow
 
