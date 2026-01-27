@@ -84,13 +84,14 @@ describe('convertFeeToVcred', () => {
   });
 
   it('handles very small fees', () => {
-    const feeEth = 1000n; // Very small amount of gwei
-    const ethToVcredRate = 2000n * 10n ** 6n;
+    // 1000 gwei is extremely small relative to 1 ETH
+    const feeEth = 1000n;
+    const ethToVcredRate = 2000n * 10n ** 6n; // 2000 VCRED per ETH
 
     const feeVcred = convertFeeToVcred(feeEth, ethToVcredRate);
 
-    // Should round down due to integer division
-    expect(feeVcred).toBe(2000n);
+    // (1000 * 2000 * 10^6) / 10^18 = 0 due to integer division
+    expect(feeVcred).toBe(0n);
   });
 
   it('handles different exchange rates', () => {

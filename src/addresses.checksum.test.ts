@@ -3,7 +3,6 @@ import { getAddress, isAddress, type Address } from 'viem';
 
 // Import all modules with hardcoded addresses
 import * as uniswapRef from './providers/uniswapRef.js';
-import * as sushiSwap from './providers/sushiSwap.js';
 import * as stargateBridge from './providers/stargateBridge.js';
 import * as hemiTunnel from './providers/hemiTunnel.js';
 
@@ -28,7 +27,6 @@ describe('Hardcoded Address Checksums', () => {
   it('all hardcoded addresses have valid checksums', () => {
     const modules = [
       { name: 'uniswapRef', module: uniswapRef },
-      { name: 'sushiSwap', module: sushiSwap },
       { name: 'stargateBridge', module: stargateBridge },
       { name: 'hemiTunnel', module: hemiTunnel },
     ];

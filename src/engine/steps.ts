@@ -1,39 +1,18 @@
-import { type Address } from 'viem';
-import { type Clients, getPublicClient, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
+import { type Clients, getPublicClient, getTokenBalance } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { requireTokenAddress, getToken, validateTokenId } from '../tokens.js';
-import { sushiSwapHemi, sushiSwapEthereum } from '../providers/sushiSwap.js';
+import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
 import { type Cycle, createStep, updateStep, updateCycleAmounts, type CycleState } from '../db.js';
 import { diag, logMoney } from '../logging.js';
-
-const MAX_UINT256 = 2n ** 256n - 1n;
 
 export interface StepResult {
   success: boolean;
   txHash?: `0x${string}`;
   error?: string;
   newState?: CycleState;
-}
-
-// Ensure token approval for a spender
-async function ensureApproval(
-  clients: Clients,
-  chainId: number,
-  token: Address,
-  spender: Address,
-  amount: bigint
-): Promise<void> {
-  const allowance = await getTokenAllowance(clients, chainId, token, spender);
-  if (allowance < amount) {
-    diag.info('Approving token', { chainId, token, spender });
-    const hash = await approveToken(clients, chainId, token, spender, MAX_UINT256);
-    // Wait for confirmation with timeout
-    const publicClient = getPublicClient(clients, chainId);
-    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-  }
 }
 
 // Execute Hemi swap: VCRED -> X
@@ -55,18 +34,15 @@ export async function executeHemiSwap(
   }
 
   try {
-    // Get quote
-    const quote = await sushiSwapHemi.quoteExactIn(clients, vcredAddress, tokenAddress, vcredIn);
+    // Get best quote from all providers
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenAddress, vcredIn);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    // Ensure approval
-    await ensureApproval(clients, CHAIN_ID_HEMI, vcredAddress, quote.to!, vcredIn);
-
-    // Execute swap
+    // Execute swap (includes approval + simulation)
     const step = createStep(cycle.id, 'HEMI_SWAP', CHAIN_ID_HEMI);
-    const txHash = await sushiSwapHemi.execute(clients, quote);
+    const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     // Wait for confirmation with timeout
@@ -191,15 +167,15 @@ export async function executeEthSwap(
   }
 
   try {
-    const quote = await sushiSwapEthereum.quoteExactIn(clients, tokenEth, usdcEth, tokenBalance);
+    // Get best quote from all providers
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenEth, usdcEth, tokenBalance);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    await ensureApproval(clients, CHAIN_ID_ETHEREUM, tokenEth, quote.to!, tokenBalance);
-
+    // Execute swap (includes approval + simulation)
     const step = createStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
-    const txHash = await sushiSwapEthereum.execute(clients, quote);
+    const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
@@ -297,15 +273,15 @@ export async function executeCloseSwap(
   const vcredBefore = await getTokenBalance(clients, CHAIN_ID_HEMI, vcredAddress);
 
   try {
-    const quote = await sushiSwapHemi.quoteExactIn(clients, usdcHemi, vcredAddress, usdcBalance);
+    // Get best quote from all providers
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, usdcHemi, vcredAddress, usdcBalance);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    await ensureApproval(clients, CHAIN_ID_HEMI, usdcHemi, quote.to!, usdcBalance);
-
+    // Execute swap (includes approval + simulation)
     const step = createStep(cycle.id, 'CLOSE_SWAP', CHAIN_ID_HEMI);
-    const txHash = await sushiSwapHemi.execute(clients, quote);
+    const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);

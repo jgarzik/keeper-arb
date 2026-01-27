@@ -2,7 +2,7 @@ import { type Clients, getPublicClient } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
-import { sushiSwapHemi, sushiSwapEthereum } from '../providers/sushiSwap.js';
+import { getBestSwapQuote } from '../providers/swapAggregator.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
 import { diag } from '../logging.js';
@@ -47,10 +47,10 @@ export async function estimateProfit(
   // Group 1: First swap + gas prices + ETH/VCRED rate (all independent)
   const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
   const [hemiSwapQuote, hemiGasPrice, ethGasPrice, ethToVcredQuote] = await Promise.all([
-    sushiSwapHemi.quoteExactIn(clients, vcredAddress, tokenHemi, vcredIn),
+    getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenHemi, vcredIn),
     hemiPublic.getGasPrice(),
     ethPublic.getGasPrice(),
-    sushiSwapHemi.quoteExactIn(clients, wethHemi, vcredAddress, 10n ** 18n).catch(() => null),
+    getBestSwapQuote(clients, CHAIN_ID_HEMI, wethHemi, vcredAddress, 10n ** 18n).catch(() => null),
   ]);
 
   if (!hemiSwapQuote) {
@@ -68,7 +68,7 @@ export async function estimateProfit(
 
   const [bridgeFeeOut, ethSwapQuote] = await Promise.all([
     bridgeFeeOutPromise,
-    sushiSwapEthereum.quoteExactIn(clients, tokenEth, usdcEth, xOut),
+    getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenEth, usdcEth, xOut),
   ]);
 
   if (!ethSwapQuote) {
@@ -80,7 +80,7 @@ export async function estimateProfit(
   // Group 3: Bridge back + close swap (both need usdcOut)
   const [bridgeFeeBack, closeSwapQuote] = await Promise.all([
     stargateEthToHemi.estimateFee(clients, usdcEth, usdcOut),
-    sushiSwapHemi.quoteExactIn(clients, usdcHemi, vcredAddress, usdcOut),
+    getBestSwapQuote(clients, CHAIN_ID_HEMI, usdcHemi, vcredAddress, usdcOut),
   ]);
 
   if (!closeSwapQuote) {
