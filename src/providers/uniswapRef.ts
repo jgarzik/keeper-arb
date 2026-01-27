@@ -45,8 +45,8 @@ export interface RefPrice {
   feeTier: number;
 }
 
-// Get reference price from Uniswap V3 on Ethereum
-export async function getUniswapRefPrice(
+// Get reference price from Uniswap V3 on Ethereum (internal)
+async function getUniswapV3Price(
   clients: Clients,
   tokenIn: Address,
   tokenOut: Address,
@@ -97,7 +97,54 @@ export async function getUniswapRefPrice(
     }
   }
 
-  diag.warn('No Uniswap pool found', { tokenIn, tokenOut });
+  return null;
+}
+
+// Get reference price - try Uniswap V3 first, then fall back to aggregator
+export async function getUniswapRefPrice(
+  clients: Clients,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: bigint
+): Promise<RefPrice | null> {
+  // Dynamic import to avoid circular dependency
+  const { getBestSwapQuote } = await import('./swapAggregator.js');
+
+  // Try Uniswap V3 first (fastest, no API calls)
+  const uniPrice = await getUniswapV3Price(clients, tokenIn, tokenOut, amountIn);
+  if (uniPrice) {
+    return uniPrice;
+  }
+
+  // Fall back to aggregator (SushiSwap, 0x, etc.)
+  diag.debug('No Uniswap pool, trying aggregator', { tokenIn, tokenOut });
+  const aggQuote = await getBestSwapQuote(
+    clients,
+    CHAIN_ID_ETHEREUM,
+    tokenIn,
+    tokenOut,
+    amountIn
+  );
+
+  if (aggQuote) {
+    diag.debug('Aggregator ref price', {
+      provider: aggQuote.provider,
+      tokenIn,
+      tokenOut,
+      amountIn: amountIn.toString(),
+      amountOut: aggQuote.amountOut.toString(),
+    });
+
+    return {
+      tokenIn,
+      tokenOut,
+      amountIn,
+      amountOut: aggQuote.amountOut,
+      feeTier: 0, // Not applicable for aggregator
+    };
+  }
+
+  diag.warn('No ref price from any source', { tokenIn, tokenOut });
   return null;
 }
 
