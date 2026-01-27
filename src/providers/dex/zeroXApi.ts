@@ -9,8 +9,11 @@ import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } 
 // Read API key from Docker secret (falls back to env var for local dev)
 function getApiKey(): string | undefined {
   try {
-    return readFileSync('/run/secrets/ZERO_X_API_KEY', 'utf8').trim();
-  } catch {
+    const key = readFileSync('/run/secrets/ZERO_X_API_KEY', 'utf8').trim();
+    diag.debug('0x API key loaded from secret', { length: key.length });
+    return key;
+  } catch (err) {
+    diag.debug('0x API key secret not found, trying env', { error: String(err) });
     return process.env.ZERO_X_API_KEY;
   }
 }
