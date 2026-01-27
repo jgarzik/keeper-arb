@@ -121,8 +121,8 @@ class SushiApiProvider implements ApiSwapProvider {
       const res = await fetch(url, { method: 'GET' });
       const latencyMs = Date.now() - start;
 
-      // SushiSwap API returns an error message for missing params but shows it's alive
-      if (res.status === 200 || res.status === 400) {
+      // SushiSwap API returns 400/422 for missing/invalid params but shows it's alive
+      if (res.status === 200 || res.status === 400 || res.status === 422) {
         return {
           provider: this.name,
           status: latencyMs > 2000 ? 'degraded' : 'ok',

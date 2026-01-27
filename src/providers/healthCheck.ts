@@ -99,7 +99,8 @@ async function checkStargateHealth(clients: Clients): Promise<ProviderHealth> {
   try {
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
 
-    // Call quoteSend with 1 wei to check contract is responsive
+    // Call quoteSend with small amount to check contract is responsive
+    // Stargate has minimum amounts, use 0.001 ETH
     await publicClient.readContract({
       address: STARGATE_POOL_NATIVE_ETH as `0x${string}`,
       abi: STARGATE_QUOTE_SEND_ABI,
@@ -108,7 +109,7 @@ async function checkStargateHealth(clients: Clients): Promise<ProviderHealth> {
         {
           dstEid: 30329, // Hemi LZ endpoint
           to: addressToBytes32(clients.address),
-          amountLD: 1n,
+          amountLD: 1000000000000000n, // 0.001 ETH
           minAmountLD: 0n,
           extraOptions: '0x',
           composeMsg: '0x',
