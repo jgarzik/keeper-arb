@@ -23,6 +23,7 @@ services:
     secrets:
       - ARBITRAGE_PRIVATE_KEY
       - DASHBOARD_PASSWORD
+      - ZERO_X_API_KEY
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL:-}
     healthcheck:
@@ -37,3 +38,5 @@ secrets:
     file: ./secrets/karb_pkey.txt
   DASHBOARD_PASSWORD:
     file: ./secrets/karb_dashpass.txt
+  ZERO_X_API_KEY:
+    file: ./secrets/karb_0x.txt
