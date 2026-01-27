@@ -343,3 +343,21 @@ a:hover {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
   word-break: break-all;
 }
+
+.new-logs-badge {
+  position: sticky;
+  top: 0;
+  background: #238636;
+  color: white;
+  padding: 8px 16px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 0.875rem;
+  z-index: 10;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.new-logs-badge:hover {
+  background: #2ea043;
+}

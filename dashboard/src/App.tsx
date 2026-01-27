@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const ARB_TARGET_TOKENS = ['WETH', 'WBTC', 'hemiBTC', 'cbBTC', 'XAUt', 'VUSD'];
 
@@ -83,6 +83,7 @@ type LogType = 'diag' | 'money';
 interface TokenMeta {
   symbol: string;
   decimals: Record<number, number>;
+  addresses: Record<number, string>;
 }
 
 async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -114,6 +115,8 @@ function App() {
   const [logFilter, setLogFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | 'debug' | 'info' | 'warn' | 'error'>('all');
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+  const [missedLogCount, setMissedLogCount] = useState(0);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Token metadata for authoritative decimals
   const [tokenMeta, setTokenMeta] = useState<Record<string, TokenMeta>>({});
@@ -157,8 +160,11 @@ function App() {
       eventSource = new EventSource(`/api/logs/stream?type=${logType}`);
 
       eventSource.onmessage = (event) => {
-        if (logsPaused) return;
-        
+        if (logsPaused) {
+          setMissedLogCount((prev) => prev + 1);
+          return;
+        }
+
         try {
           const entry: LogEntry = JSON.parse(event.data);
           setLogs((prev) => {
@@ -192,6 +198,23 @@ function App() {
 
   const clearLogs = () => {
     setLogs([]);
+  };
+
+  const handleLogScroll = () => {
+    const container = logContainerRef.current;
+    if (!container) return;
+
+    // User scrolled down > 50px from top → auto-pause
+    const isAtTop = container.scrollTop < 50;
+    if (!isAtTop && !logsPaused) {
+      setLogsPaused(true);
+    }
+  };
+
+  const jumpToLatest = () => {
+    setLogsPaused(false);
+    setMissedLogCount(0);
+    logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const filteredLogs = logs.filter((log) => {
@@ -316,9 +339,53 @@ function App() {
     return `${sign}${whole}.${frac}`;
   };
 
+  // Build address → decimals lookup from tokenMeta
+  const addressDecimals = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const meta of Object.values(tokenMeta)) {
+      for (const [chainIdStr, addr] of Object.entries(meta.addresses || {})) {
+        const chainId = Number(chainIdStr);
+        const decimals = meta.decimals[chainId];
+        if (addr && decimals !== undefined) {
+          map[addr.toLowerCase()] = decimals;
+        }
+      }
+    }
+    return map;
+  }, [tokenMeta]);
+
   // Get decimals from API metadata, with fallback
+  // Accepts either token symbol (VCRED) or address (0x...)
   const getDecimals = (token: string | undefined, chainId?: number): number => {
     if (!token) return 18;
+
+    // Check if it's an address (starts with 0x)
+    if (token.startsWith('0x')) {
+      const addrLower = token.toLowerCase();
+      if (addressDecimals[addrLower] !== undefined) {
+        return addressDecimals[addrLower];
+      }
+      // Fallback for known addresses if API not loaded
+      const knownAddrs: Record<string, number> = {
+        '0x71881974e96152643c74a8e0214b877cfb2a0aa1': 6, // VCRED
+        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 6, // USDC Eth
+        '0xad11a8beb98bbf61dbb1aa0f6d6f2ecd87b35afa': 6, // USDC Hemi
+        '0x68749665ff8d2d112fa859aa293f07a622782f38': 6, // XAUt Eth
+        '0x028de74e2fe336511a8e5fab0426d1cfd5110dbb': 6, // XAUt Hemi
+        '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 18, // WETH Eth
+        '0x4200000000000000000000000000000000000006': 18, // WETH Hemi
+        '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 8, // WBTC
+        '0xaa40c0c7644e0b2b224509571e10ad20d9c4ef28': 8, // hemiBTC
+        '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 8, // cbBTC Eth
+        '0x1596be338b999e2376675c908168a7548c8b0525': 8, // cbBTC Hemi
+      };
+      if (knownAddrs[addrLower] !== undefined) {
+        return knownAddrs[addrLower];
+      }
+      return 18; // Default for unknown addresses
+    }
+
+    // Symbol lookup
     const t = token.toUpperCase();
     if (tokenMeta[t]?.decimals) {
       if (chainId && tokenMeta[t].decimals[chainId]) return tokenMeta[t].decimals[chainId];
@@ -691,7 +758,10 @@ function App() {
                   onChange={(e) => setLogFilter(e.target.value)}
                   style={{ padding: '4px 8px', width: '200px' }}
                 />
-                <button className="btn" onClick={() => setLogsPaused(!logsPaused)}>
+                <button className="btn" onClick={() => {
+                  if (logsPaused) setMissedLogCount(0);
+                  setLogsPaused(!logsPaused);
+                }}>
                   {logsPaused ? 'Resume' : 'Pause'}
                 </button>
                 <button className="btn" onClick={clearLogs}>Clear</button>
@@ -701,7 +771,16 @@ function App() {
               </div>
             </div>
             
-            <div className="log-container">
+            <div
+              className="log-container"
+              ref={logContainerRef}
+              onScroll={handleLogScroll}
+            >
+              {logsPaused && missedLogCount > 0 && (
+                <div className="new-logs-badge" onClick={jumpToLatest}>
+                  ↑ {missedLogCount} new log{missedLogCount > 1 ? 's' : ''} - click to view
+                </div>
+              )}
               {filteredLogs.length === 0 && (
                 <div style={{ textAlign: 'center', color: '#8b949e', padding: '20px' }}>
                   No log entries yet
