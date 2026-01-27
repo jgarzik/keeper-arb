@@ -9,6 +9,28 @@ export interface ProviderHealth {
   details?: Record<string, unknown>;
 }
 
+// Price-only quote (no tx calldata)
+export interface ApiPriceQuote {
+  provider: string;
+  chainId: number;
+  tokenIn: Address;
+  tokenOut: Address;
+  amountIn: bigint;
+  amountOut: bigint;
+}
+
+// API-based price provider interface
+export interface ApiPriceProvider {
+  name: string;
+  supportedChains: number[];
+  getPrice(
+    chainId: number,
+    tokenIn: Address,
+    tokenOut: Address,
+    amountIn: bigint
+  ): Promise<ApiPriceQuote | null>;
+}
+
 // API-based swap quote with pre-built transaction
 export interface ApiSwapQuote {
   provider: string;

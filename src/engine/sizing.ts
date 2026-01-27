@@ -2,7 +2,7 @@ import { type Clients } from '../wallet.js';
 import { type Config } from '../config.js';
 import { type TokenId, requireTokenAddress, requireTokenDecimals, getToken } from '../tokens.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { getBestSwapQuote } from '../providers/swapAggregator.js';
+import { getBestPrice } from '../providers/priceAggregator.js';
 import { getUniswapRefPrice } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 
@@ -32,8 +32,8 @@ async function isProfitableAtSize(
     return null;
   }
 
-  // Step 1: Quote VCRED -> X on Hemi
-  const hemiQuote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenHemi, vcredIn);
+  // Step 1: Price VCRED -> X on Hemi
+  const hemiQuote = await getBestPrice(CHAIN_ID_HEMI, vcredAddress, tokenHemi, vcredIn);
   if (!hemiQuote) {
     return null;
   }

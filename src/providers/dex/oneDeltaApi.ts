@@ -1,5 +1,5 @@
 import { type Address } from 'viem';
-import { type ApiSwapProvider, type ApiSwapQuote, type ProviderHealth } from '../swapInterface.js';
+import { type ApiSwapProvider, type ApiSwapQuote, type ApiPriceProvider, type ApiPriceQuote, type ProviderHealth } from '../swapInterface.js';
 import { CHAIN_ID_HEMI } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
@@ -24,7 +24,7 @@ interface OneDeltaQuoteResponse {
   message?: string;
 }
 
-class OneDeltaApiProvider implements ApiSwapProvider {
+class OneDeltaApiProvider implements ApiSwapProvider, ApiPriceProvider {
   readonly name = '1delta-api';
   readonly supportedChains = [CHAIN_ID_HEMI];
 
@@ -119,6 +119,25 @@ class OneDeltaApiProvider implements ApiSwapProvider {
       });
       return null;
     }
+  }
+
+  async getPrice(
+    chainId: number,
+    tokenIn: Address,
+    tokenOut: Address,
+    amountIn: bigint
+  ): Promise<ApiPriceQuote | null> {
+    // Use getQuote internally but only return price info
+    const quote = await this.getQuote(chainId, tokenIn, tokenOut, amountIn, '0x0000000000000000000000000000000000000000', 0.01);
+    if (!quote) return null;
+    return {
+      provider: this.name,
+      chainId,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      amountOut: quote.amountOut,
+    };
   }
 
   async checkHealth(): Promise<ProviderHealth> {

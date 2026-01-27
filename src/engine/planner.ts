@@ -1,7 +1,7 @@
 import { type Clients } from '../wallet.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
-import { getBestSwapQuote } from '../providers/swapAggregator.js';
+import { getBestPrice } from '../providers/priceAggregator.js';
 import { getUniswapRefPrice, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 import { type Config } from '../config.js';
@@ -39,9 +39,8 @@ export async function detectOpportunities(
     }
 
     try {
-      // Get Hemi swap quote: VCRED -> Token (best quote from all providers)
-      const hemiQuote = await getBestSwapQuote(
-        clients,
+      // Get Hemi price: VCRED -> Token (best price from all providers)
+      const hemiQuote = await getBestPrice(
         CHAIN_ID_HEMI,
         vcredAddress,
         hemiTokenAddr,
