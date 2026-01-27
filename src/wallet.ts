@@ -12,7 +12,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { hemiMainnet, ethereumMainnet, CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from './chains.js';
-import { type Config } from './config.js';
+import { type Config, WALLET_ADDRESS } from './config.js';
 import { diag } from './logging.js';
 import { TOKENS, type TokenId, getTokenAddress } from './tokens.js';
 import { withRetry } from './retry.js';
@@ -63,6 +63,13 @@ const nonceLocks: Map<number, Promise<void>> = new Map();
 
 export function initClients(config: Config): Clients {
   const account = privateKeyToAccount(config.walletPrivateKey as `0x${string}`);
+
+  // Validate address matches expected
+  if (account.address.toLowerCase() !== WALLET_ADDRESS.toLowerCase()) {
+    throw new Error(
+      `Wallet address mismatch: expected ${WALLET_ADDRESS}, got ${account.address}`
+    );
+  }
 
   diag.info('Wallet initialized', { address: account.address });
 

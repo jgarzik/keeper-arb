@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { RPC_URLS } from './rpc.js';
 
+export const WALLET_ADDRESS = '0x84a2Da9AAD3cdbA6C5C1Bea15Ac2441DB5B254cc';
+
 export interface Config {
   // RPC endpoints
   hemiRpcUrl: string;
