@@ -36,10 +36,6 @@ function optionalEnv(name: string, defaultValue: string): string {
   return process.env[name] ?? defaultValue;
 }
 
-function parseBigInt(value: string): bigint {
-  return BigInt(value);
-}
-
 function readSecret(name: string): string {
   const path = `/run/secrets/${name}`;
   try {

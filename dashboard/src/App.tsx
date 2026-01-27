@@ -848,9 +848,13 @@ function App() {
                       <span className={`log-level log-level-${log.level}`}>{log.level.toUpperCase()}</span>
                       <span className="log-msg">{log.msg}</span>
                       {summary && <span className="log-summary">{summary}</span>}
-                      {log.token && <span className="log-badge">token={log.token}</span>}
-                      {log.chain && <span className="log-badge">chain={log.chain}</span>}
-                      {log.amount && <span className="log-badge">amount={log.amount}</span>}
+                      {log.token && <span className="log-badge">{log.token}</span>}
+                      {log.amount && log.token && (
+                        <span className="log-badge log-amount">
+                          {formatBigIntString(log.amount, getDecimals(log.token))}
+                        </span>
+                      )}
+                      {log.chain && <span className="log-badge log-chain">{log.chain}</span>}
                       {log.explorerUrl && log.txHash && (
                         <a
                           href={log.explorerUrl}
@@ -859,7 +863,7 @@ function App() {
                           className="log-link"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          tx={log.txHash.slice(0, 10)}...
+                          {log.txHash.slice(0, 10)}…
                         </a>
                       )}
                     </div>

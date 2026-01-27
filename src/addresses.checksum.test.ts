@@ -7,10 +7,10 @@ import * as stargateBridge from './providers/stargateBridge.js';
 import * as hemiTunnel from './providers/hemiTunnel.js';
 
 describe('Hardcoded Address Checksums', () => {
-  const extractAddressesFromModule = (module: any, moduleName: string): Array<{ path: string; address: string }> => {
+  const extractAddressesFromModule = (module: Record<string, unknown>, moduleName: string): Array<{ path: string; address: string }> => {
     const addresses: Array<{ path: string; address: string }> = [];
-    
-    const traverse = (obj: any, path: string) => {
+
+    const traverse = (obj: unknown, path: string) => {
       if (typeof obj === 'string' && /^0x[0-9a-fA-F]{40}$/.test(obj)) {
         addresses.push({ path: `${moduleName}.${path}`, address: obj });
       } else if (typeof obj === 'object' && obj !== null) {

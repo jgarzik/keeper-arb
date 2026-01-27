@@ -2,7 +2,7 @@ import { type Clients } from '../wallet.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
 import { getBestSwapQuote } from '../providers/swapAggregator.js';
-import { getUniswapRefPrice, calculateDiscount, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
+import { getUniswapRefPrice, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 import { type Config } from '../config.js';
 

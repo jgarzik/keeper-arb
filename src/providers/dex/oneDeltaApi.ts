@@ -33,8 +33,8 @@ class OneDeltaApiProvider implements ApiSwapProvider {
     tokenIn: Address,
     tokenOut: Address,
     amountIn: bigint,
-    sender: Address,
-    maxSlippage: number
+    _sender: Address,
+    _maxSlippage: number
   ): Promise<ApiSwapQuote | null> {
     if (!this.supportedChains.includes(chainId)) {
       return null;

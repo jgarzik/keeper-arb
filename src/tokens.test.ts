@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getToken, getTokenAddress, getTokenDecimals, requireTokenAddress, requireTokenDecimals, TOKENS, ARB_TARGET_TOKENS } from './tokens.js';
+import { getToken, getTokenAddress, getTokenDecimals, requireTokenAddress, TOKENS, ARB_TARGET_TOKENS } from './tokens.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from './chains.js';
 
 describe('tokens', () => {

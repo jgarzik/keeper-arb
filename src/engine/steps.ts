@@ -71,6 +71,7 @@ export async function executeHemiSwap(
       vcredIn: vcredIn.toString(),
       xOut: xOut.toString(),
       txHash,
+      chainId: CHAIN_ID_HEMI,
     });
 
     return { success: true, txHash, newState: 'HEMI_SWAP_DONE' };
@@ -139,6 +140,7 @@ export async function executeBridgeOut(
       amount: amount.toString(),
       provider: bridge.name,
       txHash: bridgeTx.txHash,
+      chainId: CHAIN_ID_HEMI,
     });
 
     // Determine next state based on bridge type
@@ -216,6 +218,7 @@ export async function executeEthSwap(
       tokenIn: tokenBalance.toString(),
       usdcOut: usdcOut.toString(),
       txHash,
+      chainId: CHAIN_ID_ETHEREUM,
     });
 
     return { success: true, txHash, newState: 'ETH_SWAP_DONE' };
@@ -259,8 +262,10 @@ export async function executeBridgeBack(
 
     logMoney('BRIDGE_BACK', {
       cycleId: cycle.id,
+      token: 'USDC',
       amount: usdcBalance.toString(),
       txHash: bridgeTx.txHash,
+      chainId: CHAIN_ID_ETHEREUM,
     });
 
     return { success: true, txHash: bridgeTx.txHash, newState: 'USDC_BRIDGE_BACK_SENT' };
@@ -318,9 +323,11 @@ export async function executeCloseSwap(
 
     logMoney('CLOSE_SWAP', {
       cycleId: cycle.id,
+      token: 'VCRED',
       usdcIn: usdcBalance.toString(),
       vcredOut: vcredOut.toString(),
       txHash,
+      chainId: CHAIN_ID_HEMI,
     });
 
     return { success: true, txHash, newState: 'HEMI_CLOSE_SWAP_DONE' };
@@ -384,6 +391,7 @@ export async function executeProveWithdrawal(
       cycleId: cycle.id,
       token,
       txHash: hash,
+      chainId: CHAIN_ID_ETHEREUM,
     });
 
     return { success: true, txHash: hash, newState: 'BRIDGE_OUT_PROVED' };
@@ -448,6 +456,7 @@ export async function executeFinalizeWithdrawal(
       cycleId: cycle.id,
       token,
       txHash: hash,
+      chainId: CHAIN_ID_ETHEREUM,
     });
 
     return { success: true, txHash: hash, newState: 'ON_ETHEREUM' };

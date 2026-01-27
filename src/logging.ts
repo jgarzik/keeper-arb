@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -43,6 +43,26 @@ export function initLogging(dir: string): void {
   logsDir = dir;
   if (!existsSync(logsDir)) {
     mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Load existing money.log into buffer
+  const moneyLogPath = join(logsDir, 'money.log');
+  if (existsSync(moneyLogPath)) {
+    const content = readFileSync(moneyLogPath, 'utf-8');
+    const lines = content.trim().split('\n').filter(Boolean);
+    // Take last MAX_BUFFER_SIZE lines
+    const recent = lines.slice(-MAX_BUFFER_SIZE);
+    for (const line of recent) {
+      try {
+        const entry = JSON.parse(line) as MoneyLogEntry;
+        const formatted = formatLogEntry(
+          { ts: entry.ts, level: 'info', msg: entry.event, data: entry.data },
+          'money'
+        );
+        moneyBuffer.push(formatted); // oldest first during load
+      } catch { /* skip malformed */ }
+    }
+    moneyBuffer.reverse(); // newest first
   }
 }
 
@@ -106,7 +126,7 @@ export function logMoney(event: string, data: Record<string, unknown>): void {
 }
 
 // Format log entry for streaming
-function formatLogEntry(entry: LogEntry | MoneyLogEntry, source: 'diag' | 'money'): FormattedLogEntry {
+function formatLogEntry(entry: LogEntry | MoneyLogEntry, _source: 'diag' | 'money'): FormattedLogEntry {
   const data = 'data' in entry ? entry.data : undefined;
   const msg = 'msg' in entry ? entry.msg : ('event' in entry ? entry.event : '');
   const level: LogLevel = 'level' in entry ? entry.level : 'info';
