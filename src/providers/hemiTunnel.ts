@@ -1,4 +1,4 @@
-import { type Address, encodeFunctionData } from 'viem';
+import { type Address, encodeFunctionData, parseEventLogs } from 'viem';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
 import {
   type BridgeProvider,
@@ -128,7 +128,7 @@ const OPTIMISM_PORTAL_ABI = [
 ] as const;
 
 // MessagePassed event on L2 (emitted when withdrawal initiated)
-const _MESSAGE_PASSED_EVENT = {
+const MESSAGE_PASSED_EVENT = {
   type: 'event',
   name: 'MessagePassed',
   inputs: [
@@ -169,7 +169,7 @@ function createHemiTunnelBridge(
       clients: Clients,
       token: Address,
       amount: bigint,
-      recipient: Address
+      _recipient: Address
     ): Promise<BridgeTransaction> {
       if (!isWithdrawal) {
         throw new Error('Hemi tunnel deposits should use L1 Standard Bridge directly');
@@ -232,11 +232,28 @@ function createHemiTunnelBridge(
         nonce: Number(nonce),
       });
 
+      // Wait for receipt and extract withdrawalHash
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: 120_000,
+      });
+
+      let withdrawalHash: `0x${string}` | undefined;
+      if (receipt.status === 'success') {
+        const logs = parseEventLogs({
+          abi: [MESSAGE_PASSED_EVENT],
+          logs: receipt.logs,
+        });
+        if (logs.length > 0) {
+          withdrawalHash = logs[0].args.withdrawalHash as `0x${string}`;
+        }
+      }
+
       diag.info('Hemi tunnel withdrawal initiated', {
         token,
         amount: amount.toString(),
-        recipient,
         txHash: hash,
+        withdrawalHash,
       });
 
       return {
@@ -246,7 +263,8 @@ function createHemiTunnelBridge(
         token,
         amount,
         txHash: hash,
-        status: 'sent',
+        status: receipt.status === 'success' ? 'sent' : 'failed',
+        withdrawalHash,
       };
     },
 

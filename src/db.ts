@@ -44,6 +44,7 @@ export interface Step {
   gasUsed: string | null;
   gasPrice: string | null;
   error: string | null;
+  withdrawalHash: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +73,15 @@ export function initDb(dataDir: string): Database.Database {
   db.pragma('journal_mode = WAL');
 
   createSchema(db);
+
+  // Migration: add withdrawalHash column to steps if missing
+  const hasCol = db.prepare(
+    "SELECT COUNT(*) as cnt FROM pragma_table_info('steps') WHERE name='withdrawalHash'"
+  ).get() as { cnt: number };
+  if (hasCol.cnt === 0) {
+    db.exec('ALTER TABLE steps ADD COLUMN withdrawalHash TEXT');
+  }
+
   diag.info('Database initialized', { path: dbPath });
   return db;
 }
@@ -118,6 +128,7 @@ function createSchema(db: Database.Database): void {
       gasUsed TEXT,
       gasPrice TEXT,
       error TEXT,
+      withdrawalHash TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -288,7 +299,7 @@ export function getStep(id: number): Step | undefined {
 
 export function updateStep(
   id: number,
-  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string }
+  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string; withdrawalHash?: string }
 ): void {
   const d = getDb();
   const now = new Date().toISOString();
@@ -314,6 +325,10 @@ export function updateStep(
   if (updates.error !== undefined) {
     sets.push('error = ?');
     values.push(updates.error);
+  }
+  if (updates.withdrawalHash !== undefined) {
+    sets.push('withdrawalHash = ?');
+    values.push(updates.withdrawalHash);
   }
 
   values.push(id.toString());

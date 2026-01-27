@@ -5,7 +5,7 @@ import { requireTokenAddress, getToken, validateTokenId } from '../tokens.js';
 import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
-import { type Cycle, createStep, updateStep, updateCycleAmounts, type CycleState } from '../db.js';
+import { type Cycle, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
 
 export interface StepResult {
@@ -95,29 +95,42 @@ export async function executeBridgeOut(
   }
 
   try {
-    const bridge = tokenMeta.bridgeRouteOut === 'STARGATE_LZ'
-      ? stargateHemiToEth
-      : hemiTunnelHemiToEth;
+    const isHemiTunnel = tokenMeta.bridgeRouteOut === 'HEMI_TUNNEL';
+    const bridge = isHemiTunnel ? hemiTunnelHemiToEth : stargateHemiToEth;
 
     const step = createStep(cycle.id, 'BRIDGE_OUT', CHAIN_ID_HEMI);
     const bridgeTx = await bridge.send(clients, tokenAddress, amount, clients.address);
 
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
 
-    // Wait for source tx confirmation with timeout
-    const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
-
-    if (receipt.status === 'reverted') {
+    // Hemi tunnel send() waits internally and returns status; Stargate does not
+    if (bridgeTx.status === 'failed') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
       return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
     }
 
-    updateStep(step.id, {
-      status: 'confirmed',
-      gasUsed: receipt.gasUsed,
-      gasPrice: receipt.effectiveGasPrice,
-    });
+    // For Stargate, wait for source tx confirmation
+    if (!isHemiTunnel) {
+      const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
+
+      if (receipt.status === 'reverted') {
+        updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
+        return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
+      }
+
+      updateStep(step.id, {
+        status: 'confirmed',
+        gasUsed: receipt.gasUsed,
+        gasPrice: receipt.effectiveGasPrice,
+      });
+    } else {
+      // Hemi tunnel already confirmed in send(), store withdrawalHash
+      updateStep(step.id, {
+        status: 'confirmed',
+        withdrawalHash: bridgeTx.withdrawalHash,
+      });
+    }
 
     logMoney('BRIDGE_OUT', {
       cycleId: cycle.id,
@@ -128,7 +141,7 @@ export async function executeBridgeOut(
     });
 
     // Determine next state based on bridge type
-    const nextState: CycleState = tokenMeta.bridgeRouteOut === 'HEMI_TUNNEL'
+    const nextState: CycleState = isHemiTunnel
       ? 'BRIDGE_OUT_PROVE_REQUIRED'
       : 'BRIDGE_OUT_SENT';
 
@@ -313,4 +326,11 @@ export async function executeCloseSwap(
   } catch (err) {
     return { success: false, error: String(err) };
   }
+}
+
+// Helper to retrieve withdrawalHash for a cycle's BRIDGE_OUT step
+export function getWithdrawalHashForCycle(cycleId: number): string | null {
+  const steps = getStepsForCycle(cycleId);
+  const bridgeOut = steps.find(s => s.stepType === 'BRIDGE_OUT');
+  return bridgeOut?.withdrawalHash ?? null;
 }
