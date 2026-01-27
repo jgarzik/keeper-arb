@@ -44,8 +44,6 @@ class OneDeltaApiProvider implements ApiSwapProvider {
     url.searchParams.set('sellToken', tokenIn);
     url.searchParams.set('buyToken', tokenOut);
     url.searchParams.set('sellAmount', amountIn.toString());
-    url.searchParams.set('slippagePercentage', (maxSlippage * 100).toFixed(2));
-    url.searchParams.set('takerAddress', sender);
     url.searchParams.set('aggregator', '0x'); // Use 0x backend
 
     try {
