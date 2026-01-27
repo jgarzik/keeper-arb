@@ -147,3 +147,63 @@ a:hover {
 .tab:hover {
   color: #c9d1d9;
 }
+
+/* Token Controls */
+.token-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.token-control-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+}
+
+.token-name {
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+/* Expandable Cycle Rows */
+.expandable-row:hover {
+  background: #21262d;
+}
+
+.cycle-details {
+  background: #0d1117;
+  border-top: 1px solid #30363d;
+  padding: 12px !important;
+}
+
+.steps-table {
+  width: 100%;
+  margin: 0;
+}
+
+.steps-table th {
+  background: #161b22;
+  font-size: 0.75rem;
+  padding: 6px 8px;
+}
+
+.steps-table td {
+  font-size: 0.85rem;
+  padding: 6px 8px;
+}
+
+/* Disabled Button */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background: #21262d;
+}
