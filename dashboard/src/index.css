@@ -207,3 +207,85 @@ a:hover {
 .btn:disabled:hover {
   background: #21262d;
 }
+
+/* Logs */
+.log-container {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.log-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #21262d;
+  flex-wrap: wrap;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-time {
+  color: #8b949e;
+  font-size: 0.75rem;
+  min-width: 80px;
+}
+
+.log-level {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: center;
+}
+
+.log-level-debug { background: #6e7681; color: #fff; }
+.log-level-info { background: #1f6feb; color: #fff; }
+.log-level-warn { background: #9e6a03; color: #fff; }
+.log-level-error { background: #da3633; color: #fff; }
+
+.log-msg {
+  color: #c9d1d9;
+  flex: 1;
+  min-width: 200px;
+}
+
+.log-badge {
+  background: #21262d;
+  border: 1px solid #30363d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #58a6ff;
+}
+
+.log-link {
+  background: #21262d;
+  border: 1px solid #30363d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+.log-link:hover {
+  background: #30363d;
+  text-decoration: underline;
+}
+
+.log-data {
+  color: #8b949e;
+  font-size: 0.75rem;
+  font-style: italic;
+}

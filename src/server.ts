@@ -17,7 +17,7 @@ import {
 import { calculateLifetimePnL, calculateDailyPnL, formatVcred, formatEth } from './engine/accounting.js';
 import { TOKENS, type TokenId, validateTokenId } from './tokens.js';
 import { getExplorerTxUrl } from './chains.js';
-import { diag } from './logging.js';
+import { diag, subscribeDiagLogs, subscribeMoneyLogs, getDiagBuffer, getMoneyBuffer, type FormattedLogEntry } from './logging.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -159,6 +159,48 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
       reply.code(400);
       return { success: false, error: 'Invalid token' };
     }
+  });
+
+  // SSE log streaming endpoint
+  fastify.get<{ Querystring: { type: 'diag' | 'money' } }>('/api/logs/stream', async (req, reply) => {
+    const logType = req.query.type || 'diag';
+    
+    if (logType !== 'diag' && logType !== 'money') {
+      reply.code(400);
+      return { error: 'Invalid log type. Use ?type=diag or ?type=money' };
+    }
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    // Send initial buffer (newest first)
+    const buffer = logType === 'diag' ? getDiagBuffer() : getMoneyBuffer();
+    for (const entry of buffer) {
+      reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+    }
+
+    // Subscribe to new logs
+    const unsubscribe = logType === 'diag' 
+      ? subscribeDiagLogs((entry: FormattedLogEntry) => {
+          reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+        })
+      : subscribeMoneyLogs((entry: FormattedLogEntry) => {
+          reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+        });
+
+    // Heartbeat every 15s
+    const heartbeat = setInterval(() => {
+      reply.raw.write(': heartbeat\n\n');
+    }, 15000);
+
+    // Cleanup on disconnect
+    req.raw.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   });
 
   // Serve static dashboard files if they exist

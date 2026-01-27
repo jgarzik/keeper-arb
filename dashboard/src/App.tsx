@@ -65,7 +65,20 @@ interface PnL {
   };
 }
 
-type Tab = 'status' | 'cycles' | 'pnl';
+interface LogEntry {
+  ts: string;
+  level: 'debug' | 'info' | 'warn' | 'error';
+  msg: string;
+  token?: string;
+  chain?: string;
+  amount?: string;
+  txHash?: string;
+  explorerUrl?: string;
+  data?: Record<string, unknown>;
+}
+
+type Tab = 'status' | 'cycles' | 'pnl' | 'logs';
+type LogType = 'diag' | 'money';
 
 async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -88,6 +101,13 @@ function App() {
   const [cycleSteps, setCycleSteps] = useState<Map<number, CycleDetail>>(new Map());
   const [loadingCycles, setLoadingCycles] = useState<Set<number>>(new Set());
   const [togglingTokens, setTogglingTokens] = useState<Set<string>>(new Set());
+
+  // Logs state
+  const [logType, setLogType] = useState<LogType>('diag');
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logsPaused, setLogsPaused] = useState(false);
+  const [logFilter, setLogFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState<'all' | 'debug' | 'info' | 'warn' | 'error'>('all');
 
   const refresh = async () => {
     try {
@@ -112,6 +132,67 @@ function App() {
     const interval = setInterval(refresh, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // SSE log streaming
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+
+    const connect = () => {
+      eventSource = new EventSource(`/api/logs/stream?type=${logType}`);
+
+      eventSource.onmessage = (event) => {
+        if (logsPaused) return;
+        
+        try {
+          const entry: LogEntry = JSON.parse(event.data);
+          setLogs((prev) => {
+            const updated = [entry, ...prev];
+            return updated.slice(0, 500); // Keep max 500 entries
+          });
+        } catch (err) {
+          console.error('Failed to parse log entry:', err);
+        }
+      };
+
+      eventSource.onerror = () => {
+        eventSource?.close();
+        reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        reconnectTimeout = setTimeout(connect, delay);
+      };
+
+      eventSource.onopen = () => {
+        reconnectAttempts = 0;
+      };
+    };
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [logType, logsPaused]);
+
+  const clearLogs = () => {
+    setLogs([]);
+  };
+
+  const filteredLogs = logs.filter((log) => {
+    if (levelFilter !== 'all' && log.level !== levelFilter) return false;
+    if (logFilter) {
+      const searchLower = logFilter.toLowerCase();
+      return (
+        log.msg.toLowerCase().includes(searchLower) ||
+        log.token?.toLowerCase().includes(searchLower) ||
+        log.chain?.toLowerCase().includes(searchLower) ||
+        log.txHash?.toLowerCase().includes(searchLower)
+      );
+    }
+    return true;
+  });
 
   const togglePause = async () => {
     if (status?.paused) {
@@ -210,6 +291,9 @@ function App() {
         </button>
         <button className={`tab ${tab === 'pnl' ? 'active' : ''}`} onClick={() => setTab('pnl')}>
           P&L
+        </button>
+        <button className={`tab ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>
+          Logs
         </button>
       </div>
 
@@ -448,6 +532,86 @@ function App() {
                 <div className="label">Total Gas (Hemi / Eth)</div>
                 <div>{pnl.lifetime.totalGasHemi} / {pnl.lifetime.totalGasEth} ETH</div>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === 'logs' && (
+        <>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className={`btn ${logType === 'diag' ? 'btn-success' : ''}`}
+                  onClick={() => { setLogType('diag'); setLogs([]); }}
+                >
+                  Diag Logs
+                </button>
+                <button
+                  className={`btn ${logType === 'money' ? 'btn-success' : ''}`}
+                  onClick={() => { setLogType('money'); setLogs([]); }}
+                >
+                  Money Logs
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                  className="btn"
+                  value={levelFilter}
+                  onChange={(e) => setLevelFilter(e.target.value as any)}
+                  style={{ padding: '4px 8px' }}
+                >
+                  <option value="all">All Levels</option>
+                  <option value="debug">Debug</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warn</option>
+                  <option value="error">Error</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Search logs..."
+                  className="btn"
+                  value={logFilter}
+                  onChange={(e) => setLogFilter(e.target.value)}
+                  style={{ padding: '4px 8px', width: '200px' }}
+                />
+                <button className="btn" onClick={() => setLogsPaused(!logsPaused)}>
+                  {logsPaused ? 'Resume' : 'Pause'}
+                </button>
+                <button className="btn" onClick={clearLogs}>Clear</button>
+                <span style={{ fontSize: '0.75rem', color: '#8b949e' }}>
+                  {filteredLogs.length} entries
+                </span>
+              </div>
+            </div>
+            
+            <div className="log-container">
+              {filteredLogs.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#8b949e', padding: '20px' }}>
+                  No log entries yet
+                </div>
+              )}
+              {filteredLogs.map((log, idx) => (
+                <div key={`${log.ts}-${idx}`} className="log-entry">
+                  <span className="log-time">{new Date(log.ts).toLocaleTimeString()}</span>
+                  <span className={`log-level log-level-${log.level}`}>{log.level.toUpperCase()}</span>
+                  <span className="log-msg">{log.msg}</span>
+                  {log.token && <span className="log-badge">token={log.token}</span>}
+                  {log.chain && <span className="log-badge">chain={log.chain}</span>}
+                  {log.amount && <span className="log-badge">amount={log.amount}</span>}
+                  {log.explorerUrl && log.txHash && (
+                    <a href={log.explorerUrl} target="_blank" rel="noopener noreferrer" className="log-link">
+                      tx={log.txHash.slice(0, 10)}...
+                    </a>
+                  )}
+                  {log.data && Object.keys(log.data).length > 0 && (
+                    <span className="log-data">
+                      {Object.entries(log.data).map(([k, v]) => `${k}=${String(v)}`).join(' ')}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </>
