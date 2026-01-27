@@ -135,6 +135,18 @@ function createSchema(db: Database.Database): void {
   `);
 }
 
+// Check if a process with given PID is running
+function isProcessRunning(pid: number): boolean {
+  try {
+    // Sending signal 0 doesn't kill the process, just checks if it exists
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    // ESRCH = no such process, EPERM = process exists but no permission
+    return false;
+  }
+}
+
 // Lock management for single-instance
 export function acquireLock(): boolean {
   const d = getDb();
@@ -146,10 +158,16 @@ export function acquireLock(): boolean {
     const existing = d.prepare('SELECT * FROM lock WHERE id = 1').get() as { lockedAt: string; pid: number } | undefined;
 
     if (existing) {
-      // Check if process is still running (basic check)
-      d.exec('ROLLBACK');
-      diag.warn('Lock already held', { pid: existing.pid, lockedAt: existing.lockedAt });
-      return false;
+      // Check if the process holding the lock is still running
+      if (isProcessRunning(existing.pid)) {
+        d.exec('ROLLBACK');
+        diag.warn('Lock already held by running process', { pid: existing.pid, lockedAt: existing.lockedAt });
+        return false;
+      }
+
+      // Stale lock - process no longer running, clear it
+      diag.info('Clearing stale lock from dead process', { oldPid: existing.pid, lockedAt: existing.lockedAt });
+      d.prepare('DELETE FROM lock WHERE id = 1').run();
     }
 
     d.prepare('INSERT INTO lock (id, lockedAt, pid) VALUES (1, ?, ?)').run(now, pid);

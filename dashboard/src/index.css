@@ -220,17 +220,41 @@ a:hover {
   font-size: 0.85rem;
 }
 
+.log-entry-wrapper {
+  border-bottom: 1px solid #21262d;
+}
+
+.log-entry-wrapper:last-child {
+  border-bottom: none;
+}
+
 .log-entry {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 4px 0;
-  border-bottom: 1px solid #21262d;
   flex-wrap: wrap;
 }
 
-.log-entry:last-child {
-  border-bottom: none;
+.log-entry-expandable {
+  cursor: pointer;
+}
+
+.log-entry-expandable:hover {
+  background: #161b22;
+}
+
+.log-arrow {
+  color: #8b949e;
+  font-size: 0.7rem;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.log-arrow-placeholder {
+  width: 14px;
+  flex-shrink: 0;
 }
 
 .log-time {
@@ -284,8 +308,38 @@ a:hover {
   text-decoration: underline;
 }
 
-.log-data {
-  color: #8b949e;
+.log-summary {
+  color: #58a6ff;
   font-size: 0.75rem;
+  font-weight: 500;
+  background: #21262d;
+  border: 1px solid #30363d;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.log-data-expanded {
+  background: #0d1117;
+  border-left: 2px solid #30363d;
+  margin-left: 14px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+}
+
+.log-data-item {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.log-data-key {
+  color: #8b949e;
+  min-width: 140px;
   font-style: italic;
+}
+
+.log-data-value {
+  color: #c9d1d9;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  word-break: break-all;
 }
