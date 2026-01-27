@@ -141,7 +141,7 @@ function App() {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 10000);
+    const interval = setInterval(refresh, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -882,7 +882,7 @@ function App() {
       )}
 
       <div style={{ marginTop: '20px', color: '#8b949e', fontSize: '0.75rem' }}>
-        Auto-refresh: 10s | <button className="btn" onClick={refresh} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>Refresh Now</button>
+        Auto-refresh: 60s | <button className="btn" onClick={refresh} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>Refresh Now</button>
       </div>
     </div>
   );
