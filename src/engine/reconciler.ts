@@ -31,6 +31,7 @@ export interface ReconcilerState {
   pausedTokens: Set<TokenId>;
   lastRun: Date | null;
   activeCycles: number;
+  vcredSleepUntil: Date | null;
 }
 
 const state: ReconcilerState = {
@@ -39,10 +40,15 @@ const state: ReconcilerState = {
   pausedTokens: new Set(),
   lastRun: null,
   activeCycles: 0,
+  vcredSleepUntil: null,
 };
 
 export function getReconcilerState(): ReconcilerState {
-  return { ...state, pausedTokens: new Set(state.pausedTokens) };
+  return {
+    ...state,
+    pausedTokens: new Set(state.pausedTokens),
+    vcredSleepUntil: state.vcredSleepUntil,
+  };
 }
 
 export function pauseAll(): void {
@@ -65,6 +71,23 @@ export function resumeToken(token: TokenId): void {
   diag.info('Token resumed', { token });
 }
 
+const VCRED_SLEEP_DURATION_MS = 60 * 60 * 1000; // 60 minutes
+
+export function enterVcredSleep(): void {
+  state.vcredSleepUntil = new Date(Date.now() + VCRED_SLEEP_DURATION_MS);
+  diag.info('Entering VCRED sleep', { resumeAt: state.vcredSleepUntil.toISOString() });
+}
+
+export function checkVcredSleepExpired(): boolean {
+  if (!state.vcredSleepUntil) return false;
+  if (Date.now() >= state.vcredSleepUntil.getTime()) {
+    diag.info('VCRED sleep expired, resuming');
+    state.vcredSleepUntil = null;
+    return true;
+  }
+  return false;
+}
+
 // Main reconciliation loop iteration
 export async function reconcile(clients: Clients, config: Config): Promise<void> {
   if (state.paused) {
@@ -76,6 +99,9 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
     diag.debug('Reconciler already running, skipping');
     return;
   }
+
+  // Check if VCRED sleep has expired
+  checkVcredSleepExpired();
 
   state.running = true;
   state.lastRun = new Date();
@@ -97,8 +123,8 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
       }
     }
 
-    // Step 2: Look for new opportunities if we have capacity
-    if (actionsThisLoop < MAX_ACTIONS_PER_LOOP && cycles.length < 5) {
+    // Step 2: Look for new opportunities if we have capacity (skip if in VCRED sleep)
+    if (actionsThisLoop < MAX_ACTIONS_PER_LOOP && cycles.length < 5 && !state.vcredSleepUntil) {
       const opportunity = await findNewOpportunity(clients, config);
       if (opportunity) {
         diag.info('New opportunity found', {
@@ -296,6 +322,7 @@ async function findNewOpportunity(
 
   if (vcredBalance < config.minSwapVcred) {
     diag.debug('Insufficient VCRED balance', { balance: vcredBalance.toString() });
+    enterVcredSleep();
     return null;
   }
 
