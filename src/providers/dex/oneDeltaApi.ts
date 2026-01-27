@@ -51,11 +51,12 @@ class OneDeltaApiProvider implements ApiSwapProvider {
         const res = await fetch(url.toString(), {
           headers: { Accept: 'application/json' },
         });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`1delta API HTTP ${res.status}: ${text.slice(0, 200)}`);
+        // 1delta returns 404 with JSON body for "no route" - still parse it
+        const data = await res.json() as OneDeltaQuoteResponse;
+        if (!res.ok && !data.message) {
+          throw new Error(`1delta API HTTP ${res.status}`);
         }
-        return res.json() as Promise<OneDeltaQuoteResponse>;
+        return data;
       });
 
       // Check for error or "no route" response
@@ -99,7 +100,7 @@ class OneDeltaApiProvider implements ApiSwapProvider {
 
       return quote;
     } catch (err) {
-      diag.warn('1delta API error', {
+      diag.debug('1delta API error', {
         chainId,
         tokenIn,
         tokenOut,
