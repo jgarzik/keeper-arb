@@ -354,6 +354,42 @@ function App() {
     return map;
   }, [tokenMeta]);
 
+  // Build address → symbol lookup from tokenMeta
+  const addressSymbols = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [symbol, meta] of Object.entries(tokenMeta)) {
+      for (const addr of Object.values(meta.addresses || {})) {
+        if (addr) {
+          map[addr.toLowerCase()] = symbol;
+        }
+      }
+    }
+    return map;
+  }, [tokenMeta]);
+
+  // Get symbol from address, with fallback
+  const getSymbol = (addr: string | undefined): string => {
+    if (!addr) return '?';
+    if (!addr.startsWith('0x')) return addr; // Already a symbol
+    const addrLower = addr.toLowerCase();
+    if (addressSymbols[addrLower]) return addressSymbols[addrLower];
+    // Fallback for known addresses
+    const knownSymbols: Record<string, string> = {
+      '0x71881974e96152643c74a8e0214b877cfb2a0aa1': 'VCRED',
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
+      '0xad11a8beb98bbf61dbb1aa0f6d6f2ecd87b35afa': 'USDC',
+      '0x68749665ff8d2d112fa859aa293f07a622782f38': 'XAUt',
+      '0x028de74e2fe336511a8e5fab0426d1cfd5110dbb': 'XAUt',
+      '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
+      '0x4200000000000000000000000000000000000006': 'WETH',
+      '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC',
+      '0xaa40c0c7644e0b2b224509571e10ad20d9c4ef28': 'hemiBTC',
+      '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 'cbBTC',
+      '0x1596be338b999e2376675c908168a7548c8b0525': 'cbBTC',
+    };
+    return knownSymbols[addrLower] || addr.slice(0, 8);
+  };
+
   // Get decimals from API metadata, with fallback
   // Accepts either token symbol (VCRED) or address (0x...)
   const getDecimals = (token: string | undefined, chainId?: number): number => {
@@ -425,18 +461,22 @@ function App() {
     // "Best swap quote selected" - show the winning quote
     if (log.msg === 'Best swap quote selected') {
       const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
+      const symbolIn = getSymbol(data.tokenIn);
+      const symbolOut = getSymbol(data.tokenOut);
       const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
       const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
-      return `${amountIn} → ${amountOut} (${chain})`;
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain})`;
     }
 
     // "Sushi API quote" / "Eisen API quote" - show individual quote
     if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote') {
       const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
+      const symbolIn = getSymbol(data.tokenIn);
+      const symbolOut = getSymbol(data.tokenOut);
       const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
       const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
       const impact = data.priceImpact ? ` ${(Number(data.priceImpact) * 100).toFixed(1)}%` : '';
-      return `${amountIn} → ${amountOut} (${chain}${impact})`;
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain}${impact})`;
     }
 
     // "Optimal size found" - show optimal trade sizing result
