@@ -58,8 +58,12 @@ export async function getBestSwapQuote(
     return null;
   }
 
-  // Sort by amountOut descending
-  validQuotes.sort((a, b) => Number(b.amountOut - a.amountOut));
+  // Sort by amountOut descending (use bigint comparison to avoid precision loss)
+  validQuotes.sort((a, b) => {
+    if (b.amountOut > a.amountOut) return 1;
+    if (b.amountOut < a.amountOut) return -1;
+    return 0;
+  });
   const best = validQuotes[0];
 
   diag.info('Best swap quote selected', {

@@ -80,6 +80,11 @@ interface LogEntry {
 type Tab = 'status' | 'cycles' | 'pnl' | 'logs';
 type LogType = 'diag' | 'money';
 
+interface TokenMeta {
+  symbol: string;
+  decimals: Record<number, number>;
+}
+
 async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method,
@@ -108,6 +113,10 @@ function App() {
   const [logsPaused, setLogsPaused] = useState(false);
   const [logFilter, setLogFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | 'debug' | 'info' | 'warn' | 'error'>('all');
+  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+
+  // Token metadata for authoritative decimals
+  const [tokenMeta, setTokenMeta] = useState<Record<string, TokenMeta>>({});
 
   const refresh = async () => {
     try {
@@ -131,6 +140,11 @@ function App() {
     refresh();
     const interval = setInterval(refresh, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch token metadata once on mount
+  useEffect(() => {
+    api<Record<string, TokenMeta>>('/tokens').then(setTokenMeta).catch(() => {});
   }, []);
 
   // SSE log streaming
@@ -267,6 +281,107 @@ function App() {
   };
 
   const chainName = (id: number) => (id === 43111 ? 'Hemi' : id === 1 ? 'Ethereum' : `Chain ${id}`);
+
+  const toggleLogExpand = (index: number) => {
+    const newExpanded = new Set(expandedLogs);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedLogs(newExpanded);
+  };
+
+  // Pure string formatting - no floating point conversion
+  const formatBigIntString = (value: string | undefined, decimals: number, precision = 4): string => {
+    if (!value) return '?';
+
+    const isNegative = value.startsWith('-');
+    let absValue = isNegative ? value.slice(1) : value;
+
+    // Remove any non-digit characters
+    absValue = absValue.replace(/[^0-9]/g, '');
+    if (!absValue || absValue === '') return '?';
+
+    // Pad if shorter than decimals
+    while (absValue.length <= decimals) {
+      absValue = '0' + absValue;
+    }
+
+    const splitPoint = absValue.length - decimals;
+    const whole = absValue.slice(0, splitPoint) || '0';
+    const frac = absValue.slice(splitPoint, splitPoint + precision).padEnd(precision, '0');
+
+    const sign = isNegative ? '-' : '';
+    return `${sign}${whole}.${frac}`;
+  };
+
+  // Get decimals from API metadata, with fallback
+  const getDecimals = (token: string | undefined, chainId?: number): number => {
+    if (!token) return 18;
+    const t = token.toUpperCase();
+    if (tokenMeta[t]?.decimals) {
+      if (chainId && tokenMeta[t].decimals[chainId]) return tokenMeta[t].decimals[chainId];
+      const vals = Object.values(tokenMeta[t].decimals);
+      if (vals.length > 0) return vals[0];
+    }
+    // Fallback if API not loaded yet
+    if (t === 'VCRED' || t === 'USDC' || t === 'XAUT') return 6;
+    if (t === 'WBTC' || t === 'HEMIBTC' || t === 'CBBTC') return 8;
+    return 18;
+  };
+
+  const formatMonetarySummary = (log: LogEntry): string | null => {
+    if (!log.data) return null;
+    const data = log.data as Record<string, any>;
+
+    // "Opportunity check" - show input → token (Hemi vs Ethereum comparison)
+    // Format: "1000 VCRED → WETH (0.005 Hemi vs 0.006 Ethereum)"
+    if (log.msg === 'Opportunity check') {
+      const token = data.tokenId || 'X';
+      const hemiOut = formatBigIntString(String(data.hemiOut), getDecimals(token));
+      const ethOut = formatBigIntString(String(data.ethRefOut), getDecimals(token));
+      return `→ ${token} (${hemiOut} Hemi vs ${ethOut} Eth) ${data.discount}`;
+    }
+
+    // "Profit estimate" - show the full cycle flow
+    if (log.msg === 'Profit estimate') {
+      const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
+      const xOut = formatBigIntString(String(data.xOut), getDecimals(data.token));
+      const usdcOut = formatBigIntString(String(data.usdcOut), getDecimals('USDC'));
+      const vcredOut = formatBigIntString(String(data.vcredOut), getDecimals('VCRED'));
+      const netProfit = formatBigIntString(String(data.netProfitVcred), getDecimals('VCRED'));
+      const token = data.token || 'X';
+      return `${vcredIn} VCRED → ${xOut} ${token} → ${usdcOut} USDC → ${vcredOut} VCRED (net: ${netProfit})`;
+    }
+
+    // "Best swap quote selected" - show the winning quote
+    if (log.msg === 'Best swap quote selected') {
+      const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
+      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
+      return `${amountIn} → ${amountOut} (${chain})`;
+    }
+
+    // "Sushi API quote" / "Eisen API quote" - show individual quote
+    if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote') {
+      const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
+      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
+      const impact = data.priceImpact ? ` ${(Number(data.priceImpact) * 100).toFixed(1)}%` : '';
+      return `${amountIn} → ${amountOut} (${chain}${impact})`;
+    }
+
+    // "Optimal size found" - show optimal trade sizing result
+    if (log.msg === 'Optimal size found') {
+      const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
+      const profit = formatBigIntString(String(data.profit), getDecimals('VCRED'));
+      const token = data.token || '';
+      return `${token}: ${vcredIn} VCRED → profit ${profit} VCRED`;
+    }
+
+    return null;
+  };
 
   // Compute in-flight tokens from active cycles
   const activeCyclesList = cycles.filter((c) => c.state !== 'COMPLETED' && c.state !== 'FAILED');
@@ -494,13 +609,13 @@ function App() {
               </div>
               <div style={{ marginTop: '12px' }}>
                 <div className="label">Gross Profit</div>
-                <div className={`value ${parseFloat(pnl.today.grossProfit) >= 0 ? 'positive' : 'negative'}`}>
+                <div className={`value ${pnl.today.grossProfit.startsWith('-') ? 'negative' : 'positive'}`}>
                   {pnl.today.grossProfit} VCRED
                 </div>
               </div>
               <div style={{ marginTop: '12px' }}>
                 <div className="label">Net Profit</div>
-                <div className={`value ${parseFloat(pnl.today.netProfit) >= 0 ? 'positive' : 'negative'}`}>
+                <div className={`value ${pnl.today.netProfit.startsWith('-') ? 'negative' : 'positive'}`}>
                   {pnl.today.netProfit} VCRED
                 </div>
               </div>
@@ -524,7 +639,7 @@ function App() {
               </div>
               <div style={{ marginTop: '12px' }}>
                 <div className="label">Gross Profit</div>
-                <div className={`value ${parseFloat(pnl.lifetime.grossProfit) >= 0 ? 'positive' : 'negative'}`}>
+                <div className={`value ${pnl.lifetime.grossProfit.startsWith('-') ? 'negative' : 'positive'}`}>
                   {pnl.lifetime.grossProfit} VCRED
                 </div>
               </div>
@@ -544,13 +659,13 @@ function App() {
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   className={`btn ${logType === 'diag' ? 'btn-success' : ''}`}
-                  onClick={() => { setLogType('diag'); setLogs([]); }}
+                  onClick={() => { setLogType('diag'); setLogs([]); setExpandedLogs(new Set()); }}
                 >
                   Diag Logs
                 </button>
                 <button
                   className={`btn ${logType === 'money' ? 'btn-success' : ''}`}
-                  onClick={() => { setLogType('money'); setLogs([]); }}
+                  onClick={() => { setLogType('money'); setLogs([]); setExpandedLogs(new Set()); }}
                 >
                   Money Logs
                 </button>
@@ -592,26 +707,54 @@ function App() {
                   No log entries yet
                 </div>
               )}
-              {filteredLogs.map((log, idx) => (
-                <div key={`${log.ts}-${idx}`} className="log-entry">
-                  <span className="log-time">{new Date(log.ts).toLocaleTimeString()}</span>
-                  <span className={`log-level log-level-${log.level}`}>{log.level.toUpperCase()}</span>
-                  <span className="log-msg">{log.msg}</span>
-                  {log.token && <span className="log-badge">token={log.token}</span>}
-                  {log.chain && <span className="log-badge">chain={log.chain}</span>}
-                  {log.amount && <span className="log-badge">amount={log.amount}</span>}
-                  {log.explorerUrl && log.txHash && (
-                    <a href={log.explorerUrl} target="_blank" rel="noopener noreferrer" className="log-link">
-                      tx={log.txHash.slice(0, 10)}...
-                    </a>
-                  )}
-                  {log.data && Object.keys(log.data).length > 0 && (
-                    <span className="log-data">
-                      {Object.entries(log.data).map(([k, v]) => `${k}=${String(v)}`).join(' ')}
-                    </span>
-                  )}
-                </div>
-              ))}
+              {filteredLogs.map((log, idx) => {
+                const isExpanded = expandedLogs.has(idx);
+                const summary = formatMonetarySummary(log);
+                const hasData = log.data && Object.keys(log.data).length > 0;
+
+                return (
+                  <div key={`${log.ts}-${idx}`} className="log-entry-wrapper">
+                    <div
+                      className={`log-entry ${hasData ? 'log-entry-expandable' : ''}`}
+                      onClick={() => hasData && toggleLogExpand(idx)}
+                    >
+                      {hasData ? (
+                        <span className="log-arrow">{isExpanded ? '▼' : '▶'}</span>
+                      ) : (
+                        <span className="log-arrow-placeholder"></span>
+                      )}
+                      <span className="log-time">{new Date(log.ts).toLocaleTimeString()}</span>
+                      <span className={`log-level log-level-${log.level}`}>{log.level.toUpperCase()}</span>
+                      <span className="log-msg">{log.msg}</span>
+                      {summary && <span className="log-summary">{summary}</span>}
+                      {log.token && <span className="log-badge">token={log.token}</span>}
+                      {log.chain && <span className="log-badge">chain={log.chain}</span>}
+                      {log.amount && <span className="log-badge">amount={log.amount}</span>}
+                      {log.explorerUrl && log.txHash && (
+                        <a
+                          href={log.explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="log-link"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          tx={log.txHash.slice(0, 10)}...
+                        </a>
+                      )}
+                    </div>
+                    {isExpanded && hasData && (
+                      <div className="log-data-expanded">
+                        {Object.entries(log.data!).map(([k, v]) => (
+                          <div key={k} className="log-data-item">
+                            <span className="log-data-key">{k}:</span>
+                            <span className="log-data-value">{String(v)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>

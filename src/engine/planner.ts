@@ -2,7 +2,7 @@ import { type Clients } from '../wallet.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
 import { getBestSwapQuote } from '../providers/swapAggregator.js';
-import { getUniswapRefPrice, calculateDiscount } from '../providers/uniswapRef.js';
+import { getUniswapRefPrice, calculateDiscount, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 import { type Config } from '../config.js';
 
@@ -87,13 +87,14 @@ export async function detectOpportunities(
       }
 
       // Calculate discount (positive = cheaper on Hemi)
-      const discount = calculateDiscount(hemiQuote.amountOut, ethRefPrice.amountOut);
+      const discountBps = calculateDiscountBps(hemiQuote.amountOut, ethRefPrice.amountOut);
+      const discount = Number(discountBps) / 100; // for sorting/comparison
 
       diag.info('Opportunity check', {
         tokenId,
         hemiOut: hemiQuote.amountOut.toString(),
         ethRefOut: ethRefPrice.amountOut.toString(),
-        discount: `${discount}%`,
+        discount: formatDiscountPercent(discountBps),
       });
 
       // If we get MORE token on Hemi than expected from Ethereum price, it's underpriced

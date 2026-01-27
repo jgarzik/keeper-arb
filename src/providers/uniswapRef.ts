@@ -102,14 +102,32 @@ export async function getUniswapRefPrice(
 }
 
 // Compare Hemi price vs Ethereum reference
-// Returns discount percentage (positive = cheaper on Hemi)
+// Returns discount in basis points as bigint (positive = cheaper on Hemi)
+export function calculateDiscountBps(
+  hemiAmountOut: bigint,
+  ethRefAmountOut: bigint
+): bigint {
+  if (ethRefAmountOut === 0n) return 0n;
+
+  // If hemiAmountOut > ethRefAmountOut, we're getting more on Hemi = discount
+  return ((hemiAmountOut - ethRefAmountOut) * 10000n) / ethRefAmountOut;
+}
+
+// Format basis points as percentage string (e.g., 150n -> "1.50%")
+export function formatDiscountPercent(bps: bigint): string {
+  const sign = bps < 0n ? '-' : '';
+  const absBps = bps < 0n ? -bps : bps;
+  const whole = absBps / 100n;
+  const frac = (absBps % 100n).toString().padStart(2, '0');
+  return `${sign}${whole}.${frac}%`;
+}
+
+// Legacy wrapper for callers that need a number (for sorting/comparison)
+// Safe for values that fit in JS number precision (< 2^53 basis points)
 export function calculateDiscount(
   hemiAmountOut: bigint,
   ethRefAmountOut: bigint
 ): number {
-  if (ethRefAmountOut === 0n) return 0;
-
-  // If hemiAmountOut > ethRefAmountOut, we're getting more on Hemi = discount
-  const diff = hemiAmountOut - ethRefAmountOut;
-  return Number((diff * 10000n) / ethRefAmountOut) / 100; // percentage with 2 decimals
+  const bps = calculateDiscountBps(hemiAmountOut, ethRefAmountOut);
+  return Number(bps) / 100; // percentage with 2 decimals
 }
