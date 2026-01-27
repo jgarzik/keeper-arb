@@ -5,20 +5,28 @@ import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 
 /**
- * 0x/Matcha API provider - aggregates liquidity from Curve, Uniswap, Balancer, etc.
+ * 0x Swap API v2 provider - aggregates liquidity from Curve, Uniswap, Balancer, etc.
  * Docs: https://0x.org/docs/api
+ * Note: Requires ZERO_X_API_KEY environment variable
  */
-const ZERO_X_API_BASE = 'https://api.0x.org/swap/v1';
+const ZERO_X_API_BASE = 'https://api.0x.org/swap/allowance-holder';
 
 interface ZeroXQuoteResponse {
   sellAmount: string;
   buyAmount: string;
-  to: string;
-  data: string;
-  value: string;
-  allowanceTarget: string;
-  estimatedPriceImpact?: string;
-  sources?: Array<{ name: string; proportion: string }>;
+  transaction: {
+    to: string;
+    data: string;
+    value: string;
+    gas: string;
+    gasPrice: string;
+  };
+  issues?: {
+    allowance?: { spender: string };
+  };
+  route?: {
+    fills: Array<{ source: string; proportionBps: string }>;
+  };
 }
 
 class ZeroXApiProvider implements ApiSwapProvider {
@@ -37,33 +45,44 @@ class ZeroXApiProvider implements ApiSwapProvider {
       return null;
     }
 
+    const apiKey = process.env.ZERO_X_API_KEY;
+    if (!apiKey) {
+      diag.debug('0x API key not configured, skipping');
+      return null;
+    }
+
     const url = new URL(`${ZERO_X_API_BASE}/quote`);
     url.searchParams.set('sellToken', tokenIn);
     url.searchParams.set('buyToken', tokenOut);
     url.searchParams.set('sellAmount', amountIn.toString());
-    url.searchParams.set('slippagePercentage', maxSlippage.toString());
-    url.searchParams.set('takerAddress', sender);
-    url.searchParams.set('skipValidation', 'true');
+    url.searchParams.set('slippagePercentage', (maxSlippage * 100).toFixed(2)); // v2 uses percentage
+    url.searchParams.set('taker', sender); // v2 uses 'taker' not 'takerAddress'
+    url.searchParams.set('chainId', chainId.toString());
 
     try {
       const response = await withRetry(async () => {
         const res = await fetch(url.toString(), {
           headers: {
             Accept: 'application/json',
-            '0x-api-key': process.env.ZERO_X_API_KEY || '',
+            '0x-api-key': apiKey,
+            '0x-version': 'v2',
           },
         });
         if (!res.ok) {
           const text = await res.text();
-          throw new Error(`0x API HTTP ${res.status}: ${text}`);
+          throw new Error(`0x API HTTP ${res.status}: ${text.slice(0, 200)}`);
         }
         return res.json() as Promise<ZeroXQuoteResponse>;
       });
 
-      if (!response.buyAmount || !response.to || !response.data) {
+      if (!response.buyAmount || !response.transaction) {
         diag.debug('0x API incomplete response', { chainId, tokenIn, tokenOut });
         return null;
       }
+
+      const { transaction } = response;
+      // Spender from allowance issues, or fallback to tx.to
+      const spender = response.issues?.allowance?.spender || transaction.to;
 
       const quote: ApiSwapQuote = {
         provider: this.name,
@@ -73,20 +92,17 @@ class ZeroXApiProvider implements ApiSwapProvider {
         amountIn,
         amountOut: BigInt(response.buyAmount),
         tx: {
-          to: response.to as Address,
-          data: response.data as `0x${string}`,
-          value: BigInt(response.value || '0'),
+          to: transaction.to as Address,
+          data: transaction.data as `0x${string}`,
+          value: BigInt(transaction.value || '0'),
         },
-        spender: response.allowanceTarget as Address,
-        priceImpact: response.estimatedPriceImpact
-          ? parseFloat(response.estimatedPriceImpact)
-          : undefined,
+        spender: spender as Address,
       };
 
       // Log which sources contributed (Curve, Uniswap, etc.)
-      const sources = response.sources
-        ?.filter((s) => parseFloat(s.proportion) > 0)
-        .map((s) => `${s.name}:${(parseFloat(s.proportion) * 100).toFixed(0)}%`)
+      const sources = response.route?.fills
+        ?.filter((f) => parseInt(f.proportionBps) > 0)
+        .map((f) => `${f.source}:${(parseInt(f.proportionBps) / 100).toFixed(0)}%`)
         .join(', ');
 
       diag.debug('0x API quote', {
@@ -95,7 +111,6 @@ class ZeroXApiProvider implements ApiSwapProvider {
         tokenOut,
         amountIn: amountIn.toString(),
         amountOut: quote.amountOut.toString(),
-        priceImpact: quote.priceImpact,
         sources,
       });
 
