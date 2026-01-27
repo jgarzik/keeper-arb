@@ -79,6 +79,7 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
       pausedTokens: Array.from(reconciler.pausedTokens),
       lastRun: reconciler.lastRun?.toISOString() ?? null,
       activeCycles: activeCycles.length,
+      vcredSleepUntil: reconciler.vcredSleepUntil?.toISOString() ?? null,
     };
   });
 
