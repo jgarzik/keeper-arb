@@ -40,17 +40,20 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
   // API routes
   // Token metadata API for frontend (avoids hardcoded decimals)
   fastify.get('/api/tokens', async () => {
-    const result: Record<string, { symbol: string; decimals: Record<number, number> }> = {};
+    const result: Record<string, { symbol: string; decimals: Record<number, number>; addresses: Record<number, string> }> = {};
     for (const [id, meta] of Object.entries(TOKENS)) {
       const decimals: Record<number, number> = {};
+      const addresses: Record<number, string> = {};
       for (const [chainId, info] of Object.entries(meta.chains)) {
         if (info) {
           decimals[Number(chainId)] = info.decimals;
+          addresses[Number(chainId)] = info.address;
         }
       }
       result[id] = {
         symbol: meta.symbol,
         decimals,
+        addresses,
       };
     }
     return result;

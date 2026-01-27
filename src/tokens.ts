@@ -83,6 +83,10 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     id: 'hemiBTC',
     symbol: 'hemiBTC',
     chains: {
+      [CHAIN_ID_ETHEREUM]: {
+        address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC on Ethereum
+        decimals: 8,
+      },
       [CHAIN_ID_HEMI]: {
         address: '0xAA40c0c7644e0b2B224509571e10ad20d9C4ef28',
         decimals: 8,

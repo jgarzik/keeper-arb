@@ -1,7 +1,7 @@
 import { type Address } from 'viem';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenAllowance, approveToken } from '../wallet.js';
 import { type ApiSwapProvider, type ApiSwapQuote } from './swapInterface.js';
-import { sushiApiProvider, eisenApiProvider } from './dex/index.js';
+import { sushiApiProvider, eisenApiProvider, zeroXApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
 
 const MAX_UINT256 = 2n ** 256n - 1n;
@@ -10,6 +10,7 @@ const MAX_UINT256 = 2n ** 256n - 1n;
 // NOTE: Eisen disabled - requires authentication (401 Unauthorized)
 const ALL_PROVIDERS: ApiSwapProvider[] = [
   sushiApiProvider,
+  zeroXApiProvider,  // Aggregates Curve, Uniswap, Balancer, etc.
   // eisenApiProvider,  // TODO: Enable when API auth is configured
 ];
 

@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
+import { hostname } from 'os';
 import { join } from 'path';
 import { diag } from './logging.js';
 
@@ -83,6 +84,16 @@ export function getDb(): Database.Database {
 }
 
 function createSchema(db: Database.Database): void {
+  // Check if lock table needs migration (missing hostname column)
+  // Lock table is transient (no persistent data), safe to drop and recreate
+  const lockInfo = db.prepare(
+    "SELECT COUNT(*) as cnt FROM pragma_table_info('lock') WHERE name='hostname'"
+  ).get() as { cnt: number } | undefined;
+
+  if (lockInfo && lockInfo.cnt === 0) {
+    db.exec('DROP TABLE IF EXISTS lock');
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS cycles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,7 +137,8 @@ function createSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS lock (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       lockedAt TEXT NOT NULL,
-      pid INTEGER NOT NULL
+      pid INTEGER NOT NULL,
+      hostname TEXT NOT NULL DEFAULT ''
     );
 
     CREATE INDEX IF NOT EXISTS idx_cycles_state ON cycles(state);
@@ -152,27 +164,37 @@ export function acquireLock(): boolean {
   const d = getDb();
   const now = new Date().toISOString();
   const pid = process.pid;
+  const host = hostname();
 
   try {
     d.exec('BEGIN EXCLUSIVE');
-    const existing = d.prepare('SELECT * FROM lock WHERE id = 1').get() as { lockedAt: string; pid: number } | undefined;
+    const existing = d.prepare('SELECT * FROM lock WHERE id = 1').get() as
+      { lockedAt: string; pid: number; hostname: string } | undefined;
 
     if (existing) {
-      // Check if the process holding the lock is still running
-      if (isProcessRunning(existing.pid)) {
+      // Same host + running process = truly held lock
+      if (existing.hostname === host && isProcessRunning(existing.pid)) {
         d.exec('ROLLBACK');
-        diag.warn('Lock already held by running process', { pid: existing.pid, lockedAt: existing.lockedAt });
+        diag.warn('Lock held by running process on same host', {
+          pid: existing.pid, hostname: host
+        });
         return false;
       }
 
-      // Stale lock - process no longer running, clear it
-      diag.info('Clearing stale lock from dead process', { oldPid: existing.pid, lockedAt: existing.lockedAt });
+      // Different host OR dead process = stale lock
+      diag.info('Clearing stale lock', {
+        oldPid: existing.pid,
+        oldHost: existing.hostname,
+        newHost: host,
+        reason: existing.hostname !== host ? 'different host' : 'dead process'
+      });
       d.prepare('DELETE FROM lock WHERE id = 1').run();
     }
 
-    d.prepare('INSERT INTO lock (id, lockedAt, pid) VALUES (1, ?, ?)').run(now, pid);
+    d.prepare('INSERT INTO lock (id, lockedAt, pid, hostname) VALUES (1, ?, ?, ?)')
+      .run(now, pid, host);
     d.exec('COMMIT');
-    diag.info('Lock acquired', { pid });
+    diag.info('Lock acquired', { pid, hostname: host });
     return true;
   } catch (err) {
     d.exec('ROLLBACK');
