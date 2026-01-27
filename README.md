@@ -10,28 +10,37 @@ VCRED → X (Hemi) → bridge → X (Eth) → USDC (Eth) → bridge → USDC (He
 
 Target tokens: WETH, WBTC, hemiBTC, cbBTC, XAUt, VUSD
 
-## Quick Start
+## Quick Start (Docker)
 
 ```bash
-cp .env.example .env  # configure
-npm install
-npm run build
-npm run keeper        # runs keeper + dashboard
+# Create secrets
+mkdir -p secrets
+echo "0xYOUR_PRIVATE_KEY" > secrets/karb_pkey.txt
+echo "your-dashboard-password" > secrets/karb_dashpass.txt
+chmod 600 secrets/*.txt
+
+# Run
+docker compose up --build
 ```
 
-## Environment
+Dashboard at http://localhost:7120
+
+## Configuration
+
+### Docker Secrets (required)
+
+| Secret | File | Description |
+|--------|------|-------------|
+| `ARBITRAGE_PRIVATE_KEY` | `secrets/karb_pkey.txt` | Wallet private key |
+| `DASHBOARD_PASSWORD` | `secrets/karb_dashpass.txt` | Dashboard basic auth |
+
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ARBITRAGE_PRIVATE_KEY` | yes* | Wallet key |
-| `ARBITRAGE_MNEMONIC` | yes* | Alternative to private key |
-| `HEMI_RPC_URL` | yes | Hemi RPC endpoint |
-| `ETH_RPC_URL` | yes | Ethereum RPC endpoint |
-| `DASHBOARD_PASSWORD` | yes | Dashboard basic auth |
+| `HEMI_RPC_URL` | no | Hemi RPC (has default) |
+| `ETH_RPC_URL` | no | Ethereum RPC (has default) |
 | `WEBHOOK_URL` | no | Slack/Discord notifications |
-| `MIN_PROFIT_VCRED` | no | Profit floor (default: 0) |
-
-*One of private key or mnemonic required.
 
 ## Commands
 
@@ -80,14 +89,26 @@ Password-protected web UI. Shows balances, active cycles, history, P&L.
 
 ## Container
 
+Use Docker Compose (recommended):
+
 ```bash
-docker build -t keeper-arb .
-docker run -v ./data:/app/data -v ./logs:/app/logs --env-file .env keeper-arb
+docker compose up --build
 ```
 
-Runs non-root. Mount `data/` and `logs/`.
+Or build and run manually:
 
-For Docker Compose, keep secrets under the repo root in `secrets/` (ignored by git) to match `docker-compose.yml`.
+```bash
+docker build -t keeper-arb .
+docker run \
+  -v ./data:/app/data \
+  -v ./logs:/app/logs \
+  -v ./secrets/karb_pkey.txt:/run/secrets/ARBITRAGE_PRIVATE_KEY:ro \
+  -v ./secrets/karb_dashpass.txt:/run/secrets/DASHBOARD_PASSWORD:ro \
+  -p 7120:7120 \
+  keeper-arb
+```
+
+Runs non-root. Secrets must be mounted to `/run/secrets/`.
 
 ## Chains
 
