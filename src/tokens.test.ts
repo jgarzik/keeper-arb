@@ -33,7 +33,7 @@ describe('tokens', () => {
   describe('getTokenAddress', () => {
     it('returns address for token on correct chain', () => {
       const vcredHemi = getTokenAddress('VCRED', CHAIN_ID_HEMI);
-      expect(vcredHemi).toBe('0x390D9C7c5b48dB6d15D76b96D1D8a9bfD94d93B0');
+      expect(vcredHemi).toBe('0x71881974e96152643C74A8e0214B877CfB2A0Aa1');
 
       const usdcEth = getTokenAddress('USDC', CHAIN_ID_ETHEREUM);
       expect(usdcEth).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
@@ -48,7 +48,7 @@ describe('tokens', () => {
   describe('requireTokenAddress', () => {
     it('returns address when token exists on chain', () => {
       const addr = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
-      expect(addr).toBe('0x390D9C7c5b48dB6d15D76b96D1D8a9bfD94d93B0');
+      expect(addr).toBe('0x71881974e96152643C74A8e0214B877CfB2A0Aa1');
     });
 
     it('throws when token not on chain', () => {

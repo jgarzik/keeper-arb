@@ -27,9 +27,9 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
   VCRED: {
     id: 'VCRED',
     symbol: 'VCRED',
-    decimals: 18,
+    decimals: 6,
     addresses: {
-      [CHAIN_ID_HEMI]: '0x390D9C7c5b48dB6d15D76b96D1D8a9bfD94d93B0',
+      [CHAIN_ID_HEMI]: '0x71881974e96152643C74A8e0214B877CfB2A0Aa1',
     },
   },
   USDC: {
@@ -38,7 +38,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     decimals: 6,
     addresses: {
       [CHAIN_ID_ETHEREUM]: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-      [CHAIN_ID_HEMI]: '0xad11a8beb98bbf61dbb1aa0f6d6f2ecd87b35afa', // Stargate bridged USDC.e
+      [CHAIN_ID_HEMI]: '0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA', // Stargate bridged USDC.e
     },
     bridgeRouteOut: 'STARGATE_LZ',
   },
@@ -66,7 +66,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     symbol: 'hemiBTC',
     decimals: 8,
     addresses: {
-      [CHAIN_ID_HEMI]: '0xAA40BD69c252A882522A588b8661a8b9178B9aE3',
+      [CHAIN_ID_HEMI]: '0xAA40c0c7644e0b2B224509571e10ad20d9C4ef28',
     },
     bridgeRouteOut: 'STARGATE_LZ',
   },
@@ -93,7 +93,8 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     symbol: 'VUSD',
     decimals: 18,
     addresses: {
-      [CHAIN_ID_HEMI]: '0x7a06C4F49e50D518dfAC7665A8d811B2EaA6353B',
+      [CHAIN_ID_ETHEREUM]: '0x677ddbd918637E5F2c79e164D402454dE7dA8619',
+      [CHAIN_ID_HEMI]: '0x7A06C4AeF988e7925575C50261297a946aD204A8',
     },
     bridgeRouteOut: 'HEMI_TUNNEL',
   },
