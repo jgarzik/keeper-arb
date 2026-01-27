@@ -28,9 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r keeper && useradd -r -g keeper keeper
 
-# Install production dependencies only
+# Install production dependencies only (disable husky prepare script)
 COPY package*.json ./
-RUN npm ci --production && npm cache clean --force
+RUN npm pkg delete scripts.prepare && npm ci --omit=dev && npm cache clean --force
 
 # Copy built files
 COPY --from=builder /app/dist ./dist

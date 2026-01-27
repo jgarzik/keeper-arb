@@ -96,7 +96,7 @@ interface HealthCheckResult {
   };
 }
 
-type Tab = 'status' | 'cycles' | 'pnl' | 'logs';
+type Tab = 'status' | 'cycles' | 'pnl' | 'diagnostics';
 type LogType = 'diag' | 'money';
 
 interface TokenMeta {
@@ -551,8 +551,8 @@ function App() {
         <button className={`tab ${tab === 'pnl' ? 'active' : ''}`} onClick={() => setTab('pnl')}>
           P&L
         </button>
-        <button className={`tab ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>
-          Logs
+        <button className={`tab ${tab === 'diagnostics' ? 'active' : ''}`} onClick={() => setTab('diagnostics')}>
+          Diagnostics
         </button>
       </div>
 
@@ -638,45 +638,6 @@ function App() {
             ))}
           </div>
 
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2>Providers</h2>
-              <button
-                className="btn"
-                onClick={runHealthCheck}
-                disabled={healthLoading}
-              >
-                {healthLoading ? 'Testing...' : 'API Self Test'}
-              </button>
-            </div>
-
-            {healthResult && (
-              <>
-                <div style={{ marginTop: '12px', marginBottom: '8px', fontSize: '0.75rem', color: '#8b949e' }}>
-                  Last checked: {new Date(healthResult.timestamp).toLocaleTimeString()} |{' '}
-                  <span className="positive">{healthResult.summary.ok} ok</span> |{' '}
-                  <span style={{ color: '#9e6a03' }}>{healthResult.summary.degraded} degraded</span> |{' '}
-                  <span className="negative">{healthResult.summary.error} error</span>
-                </div>
-                <div className="provider-grid">
-                  {healthResult.providers.map((p) => (
-                    <div key={p.provider} className={`provider-card provider-${p.status}`}>
-                      <span className="provider-name">{p.provider}</span>
-                      <span className={`provider-badge provider-badge-${p.status}`}>{p.status}</span>
-                      <span className="provider-latency">{p.latencyMs}ms</span>
-                      {p.error && <div className="provider-error">{p.error}</div>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {!healthResult && (
-              <p style={{ marginTop: '12px', color: '#8b949e', fontSize: '0.85rem' }}>
-                Click "API Self Test" to check provider connectivity
-              </p>
-            )}
-          </div>
         </>
       )}
 
@@ -836,7 +797,7 @@ function App() {
         </>
       )}
 
-      {tab === 'logs' && (
+      {tab === 'diagnostics' && (
         <>
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -956,6 +917,46 @@ function App() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Providers</h2>
+              <button
+                className="btn"
+                onClick={runHealthCheck}
+                disabled={healthLoading}
+              >
+                {healthLoading ? 'Testing...' : 'API Self Test'}
+              </button>
+            </div>
+
+            {healthResult && (
+              <>
+                <div style={{ marginTop: '12px', marginBottom: '8px', fontSize: '0.75rem', color: '#8b949e' }}>
+                  Last checked: {new Date(healthResult.timestamp).toLocaleTimeString()} |{' '}
+                  <span className="positive">{healthResult.summary.ok} ok</span> |{' '}
+                  <span style={{ color: '#9e6a03' }}>{healthResult.summary.degraded} degraded</span> |{' '}
+                  <span className="negative">{healthResult.summary.error} error</span>
+                </div>
+                <div className="provider-grid">
+                  {healthResult.providers.map((p) => (
+                    <div key={p.provider} className={`provider-card provider-${p.status}`}>
+                      <span className="provider-name">{p.provider}</span>
+                      <span className={`provider-badge provider-badge-${p.status}`}>{p.status}</span>
+                      <span className="provider-latency">{p.latencyMs}ms</span>
+                      {p.error && <div className="provider-error">{p.error}</div>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {!healthResult && (
+              <p style={{ marginTop: '12px', color: '#8b949e', fontSize: '0.85rem' }}>
+                Click "API Self Test" to check provider connectivity
+              </p>
+            )}
           </div>
         </>
       )}
