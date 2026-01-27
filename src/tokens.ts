@@ -76,6 +76,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     decimals: 8,
     addresses: {
       [CHAIN_ID_ETHEREUM]: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+      [CHAIN_ID_HEMI]: '0x1596bE338B999E2376675C908168A7548C8B0525',
     },
     bridgeRouteOut: 'HEMI_TUNNEL',
   },
@@ -85,6 +86,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
     decimals: 6,
     addresses: {
       [CHAIN_ID_ETHEREUM]: '0x68749665FF8D2d112Fa859AA293F07A622782F38',
+      [CHAIN_ID_HEMI]: '0x028DE74e2fE336511A8E5FAb0426D1cfD5110DBb',
     },
     bridgeRouteOut: 'HEMI_TUNNEL',
   },
