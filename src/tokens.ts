@@ -76,6 +76,10 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
         address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
         decimals: 8,
       },
+      [CHAIN_ID_HEMI]: {
+        address: '0x03C7054BCB39f7b2e5B2c7AcB37583e32D70Cfa3',
+        decimals: 8,
+      },
     },
     bridgeRouteOut: 'HEMI_TUNNEL',
   },
