@@ -87,6 +87,8 @@ docker run -v ./data:/app/data -v ./logs:/app/logs --env-file .env keeper-arb
 
 Runs non-root. Mount `data/` and `logs/`.
 
+For Docker Compose, keep secrets under the repo root in `secrets/` (ignored by git) to match `docker-compose.yml`.
+
 ## Chains
 
 - Hemi: 43111
