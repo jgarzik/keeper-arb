@@ -1,6 +1,7 @@
 import { type Clients } from '../wallet.js';
 import { type Config } from '../config.js';
-import { type TokenId } from '../tokens.js';
+import { type TokenId, requireTokenDecimals } from '../tokens.js';
+import { CHAIN_ID_HEMI } from '../chains.js';
 import { estimateProfit, type ProfitEstimate } from './profit.js';
 import { diag } from '../logging.js';
 
@@ -47,8 +48,9 @@ export async function findOptimalSize(
     }
   }
 
-  // Start with default test size
-  let testSize = 1000n * 10n ** 18n; // 1000 VCRED
+  // Start with default test size (1000 VCRED using correct decimals)
+  const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+  let testSize = 1000n * (10n ** BigInt(vcredDecimals));
   if (testSize > maxSize) testSize = maxSize;
   if (testSize < minSize) testSize = minSize;
 
@@ -62,8 +64,9 @@ export async function findOptimalSize(
     // Not profitable at base size, try shrinking
     let lower = minSize;
     let upper = testSize;
+    const granularity = 10n ** BigInt(vcredDecimals);
 
-    while (upper - lower > 10n ** 18n && quoteCalls < MAX_QUOTE_CALLS) {
+    while (upper - lower > granularity && quoteCalls < MAX_QUOTE_CALLS) {
       const mid = (lower + upper) / 2n;
       const profit = await isProfitable(mid);
 
@@ -110,7 +113,8 @@ export async function findOptimalSize(
   }
 
   // Binary search between good and bad
-  while (bad - good > 10n ** 18n && quoteCalls < MAX_QUOTE_CALLS) {
+  const granularity = 10n ** BigInt(vcredDecimals);
+  while (bad - good > granularity && quoteCalls < MAX_QUOTE_CALLS) {
     const mid = (good + bad) / 2n;
     const profit = await isProfitable(mid);
 

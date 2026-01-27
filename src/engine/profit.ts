@@ -1,7 +1,7 @@
 import { type Clients, getPublicClient } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { type TokenId, requireTokenAddress, getToken } from '../tokens.js';
+import { type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
 import { sushiSwapHemi, sushiSwapEthereum } from '../providers/sushiSwap.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
@@ -45,6 +45,7 @@ export async function estimateProfit(
   const ethPublic = getPublicClient(clients, CHAIN_ID_ETHEREUM);
 
   // Group 1: First swap + gas prices + ETH/VCRED rate (all independent)
+  const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
   const [hemiSwapQuote, hemiGasPrice, ethGasPrice, ethToVcredQuote] = await Promise.all([
     sushiSwapHemi.quoteExactIn(clients, vcredAddress, tokenHemi, vcredIn),
     hemiPublic.getGasPrice(),
@@ -57,7 +58,8 @@ export async function estimateProfit(
   }
 
   const xOut = hemiSwapQuote.amountOut;
-  const ethToVcredRate = ethToVcredQuote?.amountOut ?? 1000n * 10n ** 18n;
+  // Default ETH to VCRED rate: 1 ETH = 1000 VCRED
+  const ethToVcredRate = ethToVcredQuote?.amountOut ?? (1000n * (10n ** BigInt(vcredDecimals)));
 
   // Group 2: Bridge fee + ETH swap (both need xOut)
   const bridgeFeeOutPromise = tokenMeta.bridgeRouteOut === 'STARGATE_LZ'
@@ -139,9 +141,11 @@ export function calculateNetProfit(
 }
 
 // Convert fee in native ETH to VCRED equivalent
+// ethToVcredRate is how much VCRED you get for 1 ETH (18 decimals)
+// Result is in VCRED's native decimals
 export function convertFeeToVcred(
   feeEth: bigint,
-  ethToVcredRate: bigint // How much VCRED per 1 ETH (in wei)
+  ethToVcredRate: bigint
 ): bigint {
   return (feeEth * ethToVcredRate) / 10n ** 18n;
 }

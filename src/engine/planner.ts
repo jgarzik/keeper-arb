@@ -1,6 +1,6 @@
 import { type Clients } from '../wallet.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken } from '../tokens.js';
+import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
 import { sushiSwapHemi } from '../providers/sushiSwap.js';
 import { getUniswapRefPrice, calculateDiscount } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
@@ -18,8 +18,13 @@ export interface Opportunity {
 export async function detectOpportunities(
   clients: Clients,
   config: Config,
-  vcredTestAmount: bigint = 1000n * 10n ** 18n // 1000 VCRED for testing
+  vcredTestAmount?: bigint
 ): Promise<Opportunity[]> {
+  // Default: 1000 VCRED using correct decimals
+  if (!vcredTestAmount) {
+    const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+    vcredTestAmount = 1000n * (10n ** BigInt(vcredDecimals));
+  }
   const opportunities: Opportunity[] = [];
   const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
 
@@ -55,7 +60,12 @@ export async function detectOpportunities(
 
       // Quote equivalent USDC amount -> Token on Ethereum
       // Assuming VCRED ≈ USDC for test purposes, use same nominal amount
-      const usdcTestAmount = vcredTestAmount / 10n ** 12n; // VCRED 18 decimals -> USDC 6 decimals
+      const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+      const usdcDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+      const decimalDiff = vcredDecimals - usdcDecimals;
+      const usdcTestAmount = decimalDiff >= 0 
+        ? vcredTestAmount / (10n ** BigInt(decimalDiff))
+        : vcredTestAmount * (10n ** BigInt(-decimalDiff));
 
       if (!ethTokenAddr) {
         // Token only exists on Hemi, can't compare

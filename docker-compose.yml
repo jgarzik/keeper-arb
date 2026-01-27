@@ -10,8 +10,6 @@
 #
 # Then run: docker compose up --build
 
-version: '3.8'
-
 services:
   keeper-arb:
     build: .

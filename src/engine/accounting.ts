@@ -1,5 +1,6 @@
 import { type Cycle, getRecentCycles, getStepsForCycle, addLedgerEntry } from '../db.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
+import { requireTokenDecimals } from '../tokens.js';
 import { logMoney } from '../logging.js';
 
 export interface CyclePnL {
@@ -185,16 +186,20 @@ export function recordCycleCompletion(cycle: Cycle): void {
   }
 }
 
-// Format bigint for display (VCRED has 18 decimals)
-export function formatVcred(amount: bigint): string {
-  const whole = amount / 10n ** 18n;
-  const frac = (amount % 10n ** 18n).toString().padStart(18, '0').slice(0, 4);
+// Generic token formatter
+export function formatToken(amount: bigint, decimals: number, fractionalDigits: number = 4): string {
+  const divisor = 10n ** BigInt(decimals);
+  const whole = amount / divisor;
+  const frac = (amount % divisor).toString().padStart(decimals, '0').slice(0, fractionalDigits);
   return `${whole}.${frac}`;
 }
 
-// Format ETH amount for display
+// Legacy helpers (deprecated - use formatToken instead)
+export function formatVcred(amount: bigint): string {
+  const decimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+  return formatToken(amount, decimals, 4);
+}
+
 export function formatEth(amount: bigint): string {
-  const whole = amount / 10n ** 18n;
-  const frac = (amount % 10n ** 18n).toString().padStart(18, '0').slice(0, 6);
-  return `${whole}.${frac}`;
+  return formatToken(amount, 18, 6);
 }
