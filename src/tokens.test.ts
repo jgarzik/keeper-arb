@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getToken, getTokenAddress, requireTokenAddress, TOKENS, ARB_TARGET_TOKENS } from './tokens.js';
+import { getToken, getTokenAddress, getTokenDecimals, requireTokenAddress, requireTokenDecimals, TOKENS, ARB_TARGET_TOKENS } from './tokens.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from './chains.js';
 
 describe('tokens', () => {
@@ -7,26 +7,26 @@ describe('tokens', () => {
     it('returns VCRED token metadata', () => {
       const token = getToken('VCRED');
       expect(token.symbol).toBe('VCRED');
-      expect(token.decimals).toBe(18);
-      expect(token.addresses[CHAIN_ID_HEMI]).toBeDefined();
+      expect(token.chains[CHAIN_ID_HEMI]?.decimals).toBe(6);
+      expect(token.chains[CHAIN_ID_HEMI]?.address).toBeDefined();
     });
 
     it('returns USDC token metadata', () => {
       const token = getToken('USDC');
       expect(token.symbol).toBe('USDC');
-      expect(token.decimals).toBe(6);
-      expect(token.addresses[CHAIN_ID_ETHEREUM]).toBeDefined();
+      expect(token.chains[CHAIN_ID_ETHEREUM]?.decimals).toBe(6);
+      expect(token.chains[CHAIN_ID_ETHEREUM]?.address).toBeDefined();
     });
 
-    it('returns correct decimals for all tokens', () => {
-      expect(getToken('VCRED').decimals).toBe(18);
-      expect(getToken('USDC').decimals).toBe(6);
-      expect(getToken('WETH').decimals).toBe(18);
-      expect(getToken('WBTC').decimals).toBe(8);
-      expect(getToken('hemiBTC').decimals).toBe(8);
-      expect(getToken('cbBTC').decimals).toBe(8);
-      expect(getToken('XAUt').decimals).toBe(6);
-      expect(getToken('VUSD').decimals).toBe(18);
+    it('returns correct decimals for all tokens on their respective chains', () => {
+      expect(getTokenDecimals('VCRED', CHAIN_ID_HEMI)).toBe(6);
+      expect(getTokenDecimals('USDC', CHAIN_ID_ETHEREUM)).toBe(6);
+      expect(getTokenDecimals('WETH', CHAIN_ID_ETHEREUM)).toBe(18);
+      expect(getTokenDecimals('WBTC', CHAIN_ID_ETHEREUM)).toBe(8);
+      expect(getTokenDecimals('hemiBTC', CHAIN_ID_HEMI)).toBe(8);
+      expect(getTokenDecimals('cbBTC', CHAIN_ID_ETHEREUM)).toBe(8);
+      expect(getTokenDecimals('XAUt', CHAIN_ID_ETHEREUM)).toBe(6);
+      expect(getTokenDecimals('VUSD', CHAIN_ID_ETHEREUM)).toBe(18);
     });
   });
 

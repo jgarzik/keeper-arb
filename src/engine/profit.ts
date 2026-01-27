@@ -34,7 +34,7 @@ export async function estimateProfit(
   const usdcHemi = requireTokenAddress('USDC', CHAIN_ID_HEMI);
   const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
   const tokenHemi = requireTokenAddress(token, CHAIN_ID_HEMI);
-  const tokenEth = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
+  const tokenEth = tokenMeta.chains[CHAIN_ID_ETHEREUM]?.address;
   const wethHemi = requireTokenAddress('WETH', CHAIN_ID_HEMI);
 
   if (!tokenEth) {

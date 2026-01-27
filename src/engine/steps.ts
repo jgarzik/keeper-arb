@@ -170,7 +170,7 @@ export async function executeEthSwap(
 ): Promise<StepResult> {
   const token = validateTokenId(cycle.token);
   const tokenMeta = getToken(token);
-  const tokenEth = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
+  const tokenEth = tokenMeta.chains[CHAIN_ID_ETHEREUM]?.address;
   const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
 
   if (!tokenEth) {

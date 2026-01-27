@@ -25,8 +25,8 @@ export async function detectOpportunities(
 
   for (const tokenId of ARB_TARGET_TOKENS) {
     const tokenMeta = getToken(tokenId);
-    const hemiTokenAddr = tokenMeta.addresses[CHAIN_ID_HEMI];
-    const ethTokenAddr = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
+    const hemiTokenAddr = tokenMeta.chains[CHAIN_ID_HEMI]?.address;
+    const ethTokenAddr = tokenMeta.chains[CHAIN_ID_ETHEREUM]?.address;
 
     if (!hemiTokenAddr) {
       diag.debug('Skipping token - no Hemi address', { tokenId });

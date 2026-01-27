@@ -7,11 +7,13 @@ describe('Token Address Checksums', () => {
     const errors: string[] = [];
 
     for (const [tokenId, token] of Object.entries(TOKENS)) {
-      for (const [chainIdStr, address] of Object.entries(token.addresses)) {
+      for (const [chainIdStr, chainInfo] of Object.entries(token.chains)) {
         const chainId = parseInt(chainIdStr, 10);
         
-        // Skip if address is undefined
-        if (!address) continue;
+        // Skip if chainInfo is undefined
+        if (!chainInfo) continue;
+        
+        const address = chainInfo.address;
         
         // Check if it's a valid address format
         if (!isAddress(address)) {
@@ -46,11 +48,13 @@ describe('Token Address Checksums', () => {
     const errors: string[] = [];
 
     for (const [tokenId, token] of Object.entries(TOKENS)) {
-      for (const [chainIdStr, address] of Object.entries(token.addresses)) {
+      for (const [chainIdStr, chainInfo] of Object.entries(token.chains)) {
         const chainId = parseInt(chainIdStr, 10);
         
-        // Skip if address is undefined
-        if (!address) continue;
+        // Skip if chainInfo is undefined
+        if (!chainInfo) continue;
+        
+        const address = chainInfo.address;
         
         if (address.length !== 42) {
           errors.push(

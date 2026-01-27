@@ -248,7 +248,7 @@ async function checkBridgeArrival(
 ): Promise<boolean> {
   const token = validateTokenId(cycle.token);
   const tokenMeta = getToken(token);
-  const tokenAddr = tokenMeta.addresses[destChainId];
+  const tokenAddr = tokenMeta.chains[destChainId]?.address;
 
   if (!tokenAddr) return false;
 

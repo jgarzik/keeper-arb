@@ -15,7 +15,7 @@ import {
   resumeToken,
 } from './engine/reconciler.js';
 import { calculateLifetimePnL, calculateDailyPnL, formatVcred, formatEth } from './engine/accounting.js';
-import { TOKENS, type TokenId, validateTokenId } from './tokens.js';
+import { TOKENS, type TokenId, validateTokenId, requireTokenDecimals } from './tokens.js';
 import { getExplorerTxUrl } from './chains.js';
 import { diag, subscribeDiagLogs, subscribeMoneyLogs, getDiagBuffer, getMoneyBuffer, type FormattedLogEntry } from './logging.js';
 
@@ -59,7 +59,7 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
       tokens: Object.fromEntries(
         Object.entries(b.tokens).map(([k, v]) => [
           k,
-          formatBalance(v, TOKENS[k as TokenId].decimals),
+          formatBalance(v, requireTokenDecimals(k as TokenId, b.chainId)),
         ])
       ),
     }));
