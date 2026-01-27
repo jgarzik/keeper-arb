@@ -4,8 +4,8 @@
 # Before running, create the secrets directory and files:
 #
 #   mkdir -p secrets
-#   echo "0xYOUR_PRIVATE_KEY_HERE" > secrets/private_key.txt
-#   echo "your-dashboard-password" > secrets/dashboard_password.txt
+#   echo "0xYOUR_PRIVATE_KEY_HERE" > secrets/karb_pkey.txt
+#   echo "your-dashboard-password" > secrets/karb_dashpass.txt
 #   chmod 600 secrets/*.txt
 #
 # Then run: docker compose up --build
@@ -42,6 +42,6 @@ services:
 
 secrets:
   ARBITRAGE_PRIVATE_KEY:
-    file: ./secrets/private_key.txt
+    file: ./secrets/karb_pkey.txt
   DASHBOARD_PASSWORD:
-    file: ./secrets/dashboard_password.txt
+    file: ./secrets/karb_dashpass.txt
