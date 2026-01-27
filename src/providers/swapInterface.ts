@@ -1,5 +1,14 @@
 import { type Address } from 'viem';
 
+// Health check result for a provider
+export interface ProviderHealth {
+  provider: string;
+  status: 'ok' | 'degraded' | 'error';
+  latencyMs: number;
+  error?: string;
+  details?: Record<string, unknown>;
+}
+
 // API-based swap quote with pre-built transaction
 export interface ApiSwapQuote {
   provider: string;
@@ -33,4 +42,7 @@ export interface ApiSwapProvider {
     sender: Address,
     maxSlippage: number
   ): Promise<ApiSwapQuote | null>;
+
+  // Optional health check
+  checkHealth?(): Promise<ProviderHealth>;
 }

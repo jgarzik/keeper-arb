@@ -77,6 +77,25 @@ interface LogEntry {
   data?: Record<string, unknown>;
 }
 
+interface ProviderHealth {
+  provider: string;
+  status: 'ok' | 'degraded' | 'error';
+  latencyMs: number;
+  error?: string;
+  details?: Record<string, unknown>;
+}
+
+interface HealthCheckResult {
+  timestamp: string;
+  providers: ProviderHealth[];
+  summary: {
+    total: number;
+    ok: number;
+    degraded: number;
+    error: number;
+  };
+}
+
 type Tab = 'status' | 'cycles' | 'pnl' | 'logs';
 type LogType = 'diag' | 'money';
 
@@ -120,6 +139,10 @@ function App() {
 
   // Token metadata for authoritative decimals
   const [tokenMeta, setTokenMeta] = useState<Record<string, TokenMeta>>({});
+
+  // Provider health check state
+  const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   const refresh = async () => {
     try {
@@ -286,6 +309,18 @@ function App() {
         next.delete(token);
         return next;
       });
+    }
+  };
+
+  const runHealthCheck = async () => {
+    setHealthLoading(true);
+    try {
+      const result = await api<HealthCheckResult>('/providers/health');
+      setHealthResult(result);
+    } catch (e) {
+      setError(`Health check failed: ${e}`);
+    } finally {
+      setHealthLoading(false);
     }
   };
 
@@ -601,6 +636,46 @@ function App() {
                 </table>
               </div>
             ))}
+          </div>
+
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Providers</h2>
+              <button
+                className="btn"
+                onClick={runHealthCheck}
+                disabled={healthLoading}
+              >
+                {healthLoading ? 'Testing...' : 'API Self Test'}
+              </button>
+            </div>
+
+            {healthResult && (
+              <>
+                <div style={{ marginTop: '12px', marginBottom: '8px', fontSize: '0.75rem', color: '#8b949e' }}>
+                  Last checked: {new Date(healthResult.timestamp).toLocaleTimeString()} |{' '}
+                  <span className="positive">{healthResult.summary.ok} ok</span> |{' '}
+                  <span style={{ color: '#9e6a03' }}>{healthResult.summary.degraded} degraded</span> |{' '}
+                  <span className="negative">{healthResult.summary.error} error</span>
+                </div>
+                <div className="provider-grid">
+                  {healthResult.providers.map((p) => (
+                    <div key={p.provider} className={`provider-card provider-${p.status}`}>
+                      <span className="provider-name">{p.provider}</span>
+                      <span className={`provider-badge provider-badge-${p.status}`}>{p.status}</span>
+                      <span className="provider-latency">{p.latencyMs}ms</span>
+                      {p.error && <div className="provider-error">{p.error}</div>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {!healthResult && (
+              <p style={{ marginTop: '12px', color: '#8b949e', fontSize: '0.85rem' }}>
+                Click "API Self Test" to check provider connectivity
+              </p>
+            )}
           </div>
         </>
       )}

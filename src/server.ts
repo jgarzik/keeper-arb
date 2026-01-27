@@ -18,6 +18,7 @@ import { calculateLifetimePnL, calculateDailyPnL, formatVcred, formatEth } from 
 import { TOKENS, type TokenId, validateTokenId, requireTokenDecimals } from './tokens.js';
 import { getExplorerTxUrl } from './chains.js';
 import { diag, subscribeDiagLogs, subscribeMoneyLogs, getDiagBuffer, getMoneyBuffer, type FormattedLogEntry } from './logging.js';
+import { checkAllProviders } from './providers/healthCheck.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -189,6 +190,11 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
       reply.code(400);
       return { success: false, error: 'Invalid token' };
     }
+  });
+
+  // Provider health check endpoint
+  fastify.get('/api/providers/health', async () => {
+    return checkAllProviders(clients);
   });
 
   // SSE log streaming endpoint

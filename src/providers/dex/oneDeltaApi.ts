@@ -1,5 +1,5 @@
 import { type Address } from 'viem';
-import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
+import { type ApiSwapProvider, type ApiSwapQuote, type ProviderHealth } from '../swapInterface.js';
 import { CHAIN_ID_HEMI } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
@@ -118,6 +118,49 @@ class OneDeltaApiProvider implements ApiSwapProvider {
         error: String(err),
       });
       return null;
+    }
+  }
+
+  async checkHealth(): Promise<ProviderHealth> {
+    const start = Date.now();
+    try {
+      // Call the quote endpoint with minimal params to check connectivity
+      const url = new URL(`${ONE_DELTA_API_BASE}/quote`);
+      url.searchParams.set('chainId', CHAIN_ID_HEMI.toString());
+      // Use WETH addresses on Hemi
+      url.searchParams.set('sellToken', '0x4200000000000000000000000000000000000006');
+      url.searchParams.set('buyToken', '0xad11a8beb98bbf61dbb1aa0f6d6f2ecd87b35afa'); // USDC on Hemi
+      url.searchParams.set('sellAmount', '1000000000000000'); // 0.001 ETH
+      url.searchParams.set('aggregator', '0x');
+
+      const res = await fetch(url.toString(), {
+        headers: { Accept: 'application/json' },
+      });
+
+      const latencyMs = Date.now() - start;
+
+      // 1delta returns 404 with JSON for "no route" but that still means API is alive
+      if (res.ok || res.status === 404) {
+        return {
+          provider: this.name,
+          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          latencyMs,
+        };
+      }
+
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs,
+        error: `HTTP ${res.status}`,
+      };
+    } catch (err) {
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs: Date.now() - start,
+        error: String(err),
+      };
     }
   }
 }

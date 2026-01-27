@@ -361,3 +361,78 @@ a:hover {
 .new-logs-badge:hover {
   background: #2ea043;
 }
+
+/* Provider Health Check */
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.provider-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+}
+
+.provider-ok {
+  border-color: #238636;
+}
+
+.provider-degraded {
+  border-color: #9e6a03;
+}
+
+.provider-error {
+  border-color: #da3633;
+}
+
+.provider-name {
+  font-weight: 600;
+  color: #c9d1d9;
+  flex: 1;
+  min-width: 80px;
+}
+
+.provider-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.provider-badge-ok {
+  background: #238636;
+  color: #fff;
+}
+
+.provider-badge-degraded {
+  background: #9e6a03;
+  color: #fff;
+}
+
+.provider-badge-error {
+  background: #da3633;
+  color: #fff;
+}
+
+.provider-latency {
+  font-size: 0.75rem;
+  color: #8b949e;
+}
+
+.provider-error {
+  width: 100%;
+  font-size: 0.75rem;
+  color: #f85149;
+  margin-top: 4px;
+  word-break: break-word;
+}

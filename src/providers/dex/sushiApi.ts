@@ -1,5 +1,5 @@
 import { type Address } from 'viem';
-import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
+import { type ApiSwapProvider, type ApiSwapQuote, type ProviderHealth } from '../swapInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
@@ -110,6 +110,39 @@ class SushiApiProvider implements ApiSwapProvider {
         error: String(err),
       });
       return null;
+    }
+  }
+
+  async checkHealth(): Promise<ProviderHealth> {
+    const start = Date.now();
+    try {
+      // Simple GET to the Ethereum swap endpoint to check if API is reachable
+      const url = `${SUSHI_API_BASE}/${CHAIN_ID_ETHEREUM}`;
+      const res = await fetch(url, { method: 'GET' });
+      const latencyMs = Date.now() - start;
+
+      // SushiSwap API returns an error message for missing params but shows it's alive
+      if (res.status === 200 || res.status === 400) {
+        return {
+          provider: this.name,
+          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          latencyMs,
+        };
+      }
+
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs,
+        error: `HTTP ${res.status}`,
+      };
+    } catch (err) {
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs: Date.now() - start,
+        error: String(err),
+      };
     }
   }
 }

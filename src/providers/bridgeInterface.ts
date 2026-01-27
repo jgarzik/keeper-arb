@@ -1,5 +1,6 @@
 import { type Address } from 'viem';
 import { type Clients } from '../wallet.js';
+import { type ProviderHealth } from './swapInterface.js';
 
 export type BridgeStatus =
   | 'pending'
@@ -56,4 +57,7 @@ export interface BridgeProvider {
     minAmount: bigint,
     sinceBlock?: bigint
   ): Promise<boolean>;
+
+  // Optional health check
+  checkHealth?(clients: Clients): Promise<ProviderHealth>;
 }

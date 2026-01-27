@@ -1,9 +1,19 @@
+import { readFileSync } from 'node:fs';
 import { type Address } from 'viem';
-import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
+import { type ApiSwapProvider, type ApiSwapQuote, type ProviderHealth } from '../swapInterface.js';
 import { CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
+
+// Read API key from Docker secret (falls back to env var for local dev)
+function getApiKey(): string | undefined {
+  try {
+    return readFileSync('/run/secrets/ZERO_X_API_KEY', 'utf8').trim();
+  } catch {
+    return process.env.ZERO_X_API_KEY;
+  }
+}
 
 /**
  * 0x Swap API v2 provider - aggregates liquidity from Curve, Uniswap, Balancer, etc.
@@ -46,7 +56,7 @@ class ZeroXApiProvider implements ApiSwapProvider {
       return null;
     }
 
-    const apiKey = process.env.ZERO_X_API_KEY;
+    const apiKey = getApiKey();
     if (!apiKey) {
       diag.debug('0x API key not configured, skipping');
       return null;
@@ -131,6 +141,72 @@ class ZeroXApiProvider implements ApiSwapProvider {
         error: String(err),
       });
       return null;
+    }
+  }
+
+  async checkHealth(): Promise<ProviderHealth> {
+    const start = Date.now();
+    const apiKey = getApiKey();
+
+    if (!apiKey) {
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs: 0,
+        error: 'API key not configured',
+      };
+    }
+
+    try {
+      // Call the price endpoint with minimal params to check connectivity and auth
+      const url = new URL(`${ZERO_X_API_BASE}/price`);
+      url.searchParams.set('sellToken', '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'); // WETH
+      url.searchParams.set('buyToken', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'); // USDC
+      url.searchParams.set('sellAmount', '1000000000000000'); // 0.001 ETH
+      url.searchParams.set('chainId', '1');
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          Accept: 'application/json',
+          '0x-api-key': apiKey,
+          '0x-version': 'v2',
+        },
+      });
+
+      const latencyMs = Date.now() - start;
+
+      if (res.ok) {
+        return {
+          provider: this.name,
+          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          latencyMs,
+          details: { hasApiKey: true },
+        };
+      }
+
+      // Check for auth errors
+      if (res.status === 401 || res.status === 403) {
+        return {
+          provider: this.name,
+          status: 'error',
+          latencyMs,
+          error: 'Invalid API key',
+        };
+      }
+
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs,
+        error: `HTTP ${res.status}`,
+      };
+    } catch (err) {
+      return {
+        provider: this.name,
+        status: 'error',
+        latencyMs: Date.now() - start,
+        error: String(err),
+      };
     }
   }
 }
