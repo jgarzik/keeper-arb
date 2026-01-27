@@ -101,7 +101,6 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
         diag.info('New opportunity found', {
           token: opportunity.token,
           vcredIn: opportunity.vcredIn.toString(),
-          estimatedProfit: opportunity.profit.toString(),
         });
         actionsThisLoop++;
       }
@@ -264,7 +263,7 @@ async function checkBridgeArrival(
 async function findNewOpportunity(
   clients: Clients,
   config: Config
-): Promise<{ token: TokenId; vcredIn: bigint; profit: bigint } | null> {
+): Promise<{ token: TokenId; vcredIn: bigint } | null> {
   // Get VCRED balance
   const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
   const vcredBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, vcredAddress);
@@ -300,14 +299,13 @@ async function findNewOpportunity(
     cycleId: cycle.id,
     token: opportunity.token,
     vcredIn: sizing.optimalVcredIn.toString(),
-    estimatedProfit: sizing.estimatedProfit.toString(),
-    discount: `${opportunity.discountPercent}%`,
+    hemiOut: sizing.hemiAmountOut.toString(),
+    ethRefOut: sizing.ethRefAmountOut.toString(),
   });
 
   return {
     token: opportunity.token,
     vcredIn: sizing.optimalVcredIn,
-    profit: sizing.estimatedProfit,
   };
 }
 

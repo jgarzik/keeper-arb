@@ -22,7 +22,6 @@ export interface Config {
   // Trading limits
   minSwapVcred: bigint;
   maxSwapVcredCap: bigint;
-  minProfitVcred: bigint;
 
   // Timing
   reconcileIntervalMs: number;
@@ -69,12 +68,12 @@ export function loadConfig(): Config {
 
     webhookUrl: process.env.WEBHOOK_URL,
 
-    minSwapVcred: parseBigInt(optionalEnv('MIN_SWAP_VCRED', '100')),
-    maxSwapVcredCap: parseBigInt(optionalEnv('MAX_SWAP_VCRED_CAP', '100000')),
-    minProfitVcred: parseBigInt(optionalEnv('MIN_PROFIT_VCRED', '0')),
+    // VCRED has 6 decimals: 100 VCRED = 100_000_000
+    minSwapVcred: 100_000_000n,        // 100 VCRED
+    maxSwapVcredCap: 100_000_000_000n, // 100,000 VCRED
 
-    reconcileIntervalMs: parseInt(optionalEnv('RECONCILE_INTERVAL_MS', '30000'), 10),
-    quotesTtlMs: parseInt(optionalEnv('QUOTES_TTL_MS', '10000'), 10),
+    reconcileIntervalMs: 30_000,
+    quotesTtlMs: 10_000,
 
     dataDir: optionalEnv('DATA_DIR', './data'),
     logsDir: optionalEnv('LOGS_DIR', './logs'),

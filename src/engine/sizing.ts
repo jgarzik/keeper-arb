@@ -1,18 +1,63 @@
 import { type Clients } from '../wallet.js';
 import { type Config } from '../config.js';
-import { type TokenId, requireTokenDecimals } from '../tokens.js';
-import { CHAIN_ID_HEMI } from '../chains.js';
-import { estimateProfit, type ProfitEstimate } from './profit.js';
+import { type TokenId, requireTokenAddress, requireTokenDecimals, getToken } from '../tokens.js';
+import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
+import { getBestSwapQuote } from '../providers/swapAggregator.js';
+import { getUniswapRefPrice } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 
 export interface SizingResult {
   token: TokenId;
   optimalVcredIn: bigint;
-  estimatedProfit: bigint;
-  profitEstimate: ProfitEstimate;
+  hemiAmountOut: bigint;
+  ethRefAmountOut: bigint;
 }
 
-const MAX_QUOTE_CALLS = 15; // Limit quote calls per sizing operation
+const MAX_QUOTE_CALLS = 15;
+
+// Check if a trade is profitable at a given size
+// Logic: If Hemi gives more X than Ethereum for equivalent input, it's profitable
+async function isProfitableAtSize(
+  clients: Clients,
+  token: TokenId,
+  vcredIn: bigint
+): Promise<{ profitable: boolean; hemiOut: bigint; ethOut: bigint } | null> {
+  const tokenMeta = getToken(token);
+  const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
+  const tokenHemi = requireTokenAddress(token, CHAIN_ID_HEMI);
+  const tokenEth = tokenMeta.chains[CHAIN_ID_ETHEREUM]?.address;
+  const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
+
+  if (!tokenEth) {
+    return null;
+  }
+
+  // Step 1: Quote VCRED -> X on Hemi
+  const hemiQuote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenHemi, vcredIn);
+  if (!hemiQuote) {
+    return null;
+  }
+
+  // Step 2: Quote equivalent USDC -> X on Ethereum
+  const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+  const usdcDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+  const decimalDiff = vcredDecimals - usdcDecimals;
+  const usdcAmount = decimalDiff >= 0
+    ? vcredIn / (10n ** BigInt(decimalDiff))
+    : vcredIn * (10n ** BigInt(-decimalDiff));
+
+  const ethRefQuote = await getUniswapRefPrice(clients, usdcEth, tokenEth, usdcAmount);
+  if (!ethRefQuote) {
+    return null;
+  }
+
+  // Step 3: If Hemi gives more X than Ethereum, it's profitable
+  return {
+    profitable: hemiQuote.amountOut > ethRefQuote.amountOut,
+    hemiOut: hemiQuote.amountOut,
+    ethOut: ethRefQuote.amountOut,
+  };
+}
 
 // Binary search to find maximum profitable trade size
 export async function findOptimalSize(
@@ -33,79 +78,44 @@ export async function findOptimalSize(
   }
 
   let quoteCalls = 0;
+  const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+  const granularity = 10n ** BigInt(vcredDecimals);
 
-  // Helper to check profitability at a given size
-  async function isProfitable(vcredIn: bigint): Promise<ProfitEstimate | null> {
-    if (quoteCalls >= MAX_QUOTE_CALLS) {
-      return null;
-    }
-    quoteCalls++;
-
-    try {
-      return await estimateProfit(clients, config, token, vcredIn);
-    } catch {
-      return null;
-    }
+  async function checkSize(vcredIn: bigint) {
+    if (quoteCalls >= MAX_QUOTE_CALLS) return null;
+    quoteCalls += 2; // Each check makes 2 quote calls
+    return isProfitableAtSize(clients, token, vcredIn);
   }
 
-  // Start with default test size (1000 VCRED using correct decimals)
-  const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
-  let testSize = 1000n * (10n ** BigInt(vcredDecimals));
+  // Start with default test size (1000 VCRED)
+  let testSize = 1000n * granularity;
   if (testSize > maxSize) testSize = maxSize;
   if (testSize < minSize) testSize = minSize;
 
-  const initialProfit = await isProfitable(testSize);
-  if (!initialProfit) {
-    diag.debug('Could not get initial profit estimate', { token, testSize: testSize.toString() });
+  const initial = await checkSize(testSize);
+  if (!initial) {
+    diag.debug('Could not get initial quote', { token, testSize: testSize.toString() });
     return null;
   }
 
-  if (initialProfit.netProfitVcred <= config.minProfitVcred) {
-    // Not profitable at base size, try shrinking
-    let lower = minSize;
-    let upper = testSize;
-    const granularity = 10n ** BigInt(vcredDecimals);
-
-    while (upper - lower > granularity && quoteCalls < MAX_QUOTE_CALLS) {
-      const mid = (lower + upper) / 2n;
-      const profit = await isProfitable(mid);
-
-      if (profit && profit.netProfitVcred > config.minProfitVcred) {
-        // Found profitable size, search upward
-        lower = mid;
-      } else {
-        // Still not profitable, search lower
-        upper = mid;
-      }
-    }
-
-    const finalProfit = await isProfitable(lower);
-    if (!finalProfit || finalProfit.netProfitVcred <= config.minProfitVcred) {
-      diag.info('No profitable size found', { token });
-      return null;
-    }
-
-    return {
-      token,
-      optimalVcredIn: lower,
-      estimatedProfit: finalProfit.netProfitVcred,
-      profitEstimate: finalProfit,
-    };
+  if (!initial.profitable) {
+    diag.info('Not profitable at base size', { token });
+    return null;
   }
 
-  // Profitable at base size, try to find maximum profitable size
+  // Profitable at base size, find maximum profitable size
   let good = testSize;
-  let goodProfit = initialProfit;
-  let bad = maxSize;
+  let goodResult = initial;
+  let bad = maxSize + granularity;
 
-  // First, expand to find upper bound
+  // Expand to find upper bound
   while (good < maxSize && quoteCalls < MAX_QUOTE_CALLS) {
     const next = good * 2n > maxSize ? maxSize : good * 2n;
-    const profit = await isProfitable(next);
+    const result = await checkSize(next);
 
-    if (profit && profit.netProfitVcred > config.minProfitVcred) {
+    if (result && result.profitable) {
       good = next;
-      goodProfit = profit;
+      goodResult = result;
     } else {
       bad = next;
       break;
@@ -113,14 +123,13 @@ export async function findOptimalSize(
   }
 
   // Binary search between good and bad
-  const granularity = 10n ** BigInt(vcredDecimals);
   while (bad - good > granularity && quoteCalls < MAX_QUOTE_CALLS) {
     const mid = (good + bad) / 2n;
-    const profit = await isProfitable(mid);
+    const result = await checkSize(mid);
 
-    if (profit && profit.netProfitVcred > config.minProfitVcred) {
+    if (result && result.profitable) {
       good = mid;
-      goodProfit = profit;
+      goodResult = result;
     } else {
       bad = mid;
     }
@@ -129,21 +138,22 @@ export async function findOptimalSize(
   diag.info('Optimal size found', {
     token,
     vcredIn: good.toString(),
-    profit: goodProfit.netProfitVcred.toString(),
+    hemiOut: goodResult.hemiOut.toString(),
+    ethRefOut: goodResult.ethOut.toString(),
     quoteCalls,
   });
 
   return {
     token,
     optimalVcredIn: good,
-    estimatedProfit: goodProfit.netProfitVcred,
-    profitEstimate: goodProfit,
+    hemiAmountOut: goodResult.hemiOut,
+    ethRefAmountOut: goodResult.ethOut,
   };
 }
 
 // Pure binary search logic for testing
 export function binarySearchProfitable(
-  profitAtSize: (size: bigint) => bigint, // Returns profit for a given size
+  profitAtSize: (size: bigint) => bigint,
   minSize: bigint,
   maxSize: bigint,
   minProfit: bigint,
@@ -151,16 +161,13 @@ export function binarySearchProfitable(
 ): bigint | null {
   if (maxSize < minSize) return null;
 
-  // Check if any size is profitable
   if (profitAtSize(minSize) <= minProfit) {
-    // Even minimum size isn't profitable
     return null;
   }
 
   let good = minSize;
   let bad = maxSize + granularity;
 
-  // Binary search
   while (bad - good > granularity) {
     const mid = (good + bad) / 2n;
     if (profitAtSize(mid) > minProfit) {

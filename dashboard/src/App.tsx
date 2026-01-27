@@ -633,8 +633,8 @@ function App() {
                     </td>
                     <td>{c.id}</td>
                     <td>{c.token}</td>
-                    <td>{c.vcredIn}</td>
-                    <td>{c.vcredOut ?? '-'}</td>
+                    <td>{formatBigIntString(c.vcredIn, getDecimals('VCRED'))}</td>
+                    <td>{c.vcredOut ? formatBigIntString(c.vcredOut, getDecimals('VCRED')) : '-'}</td>
                     <td>
                       <span className={`status-badge status-${c.state === 'COMPLETED' ? 'completed' : c.state === 'FAILED' ? 'failed' : 'pending'}`}>
                         {c.state}

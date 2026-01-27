@@ -1,5 +1,5 @@
 import { type Address, encodeFunctionData } from 'viem';
-import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
 import {
   type BridgeProvider,
   type BridgeTransaction,
@@ -175,26 +175,60 @@ function createHemiTunnelBridge(
         throw new Error('Hemi tunnel deposits should use L1 Standard Bridge directly');
       }
 
+      const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
       const walletClient = getWalletClient(clients, CHAIN_ID_HEMI);
+
+      // Ensure token approval for bridge
+      const allowance = await getTokenAllowance(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE);
+      if (allowance < amount) {
+        diag.info('Approving token for Hemi tunnel bridge', {
+          token,
+          spender: HEMI_L2_STANDARD_BRIDGE,
+          amount: amount.toString(),
+        });
+        const approvalHash = await approveToken(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE, amount * 2n);
+        await publicClient.waitForTransactionReceipt({ hash: approvalHash, timeout: 120_000 });
+      }
+
       const nonce = await getNextNonce(clients, CHAIN_ID_HEMI);
 
-      // Withdraw from L2 to L1
+      // Withdraw from L2 to L1 (sends to msg.sender on L1)
+      // Using 'withdraw' not 'withdrawTo' per Hemi's implementation
       const data = encodeFunctionData({
         abi: L2_STANDARD_BRIDGE_ABI,
-        functionName: 'withdrawTo',
+        functionName: 'withdraw',
         args: [
           token,
           amount,
-          recipient,
-          200000, // minGasLimit
+          0, // minGasLimit (Hemi uses 0)
           '0x',
         ],
       });
 
+      // Estimate EIP-1559 fees
+      const fees = await publicClient.estimateFeesPerGas();
+
+      // Estimate gas with account for simulation
+      const gasEstimate = await publicClient.estimateGas({
+        account: clients.account,
+        to: HEMI_L2_STANDARD_BRIDGE,
+        data,
+        value: 0n,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+      });
+
+      // Pad gas by 20% for contract calls
+      const gas = (gasEstimate * 12n) / 10n;
+
+      // Send transaction (walletClient has account configured for local signing)
       const hash = await walletClient.sendTransaction({
         to: HEMI_L2_STANDARD_BRIDGE,
         data,
         value: 0n,
+        gas,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
         nonce: Number(nonce),
       });
 

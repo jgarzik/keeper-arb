@@ -25,10 +25,6 @@ services:
       - DASHBOARD_PASSWORD
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL:-}
-      - MIN_SWAP_VCRED=${MIN_SWAP_VCRED:-100}
-      - MAX_SWAP_VCRED_CAP=${MAX_SWAP_VCRED_CAP:-100000}
-      - MIN_PROFIT_VCRED=${MIN_PROFIT_VCRED:-0}
-      - RECONCILE_INTERVAL_MS=${RECONCILE_INTERVAL_MS:-30000}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7120/api/status"]
       interval: 30s
