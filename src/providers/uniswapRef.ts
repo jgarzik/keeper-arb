@@ -2,6 +2,7 @@ import { type Address } from 'viem';
 import { type Clients, getPublicClient } from '../wallet.js';
 import { CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
+import { withRetry } from '../retry.js';
 
 // Uniswap V3 Quoter V2 on Ethereum
 const QUOTER_V2_ADDRESS: Address = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e';
@@ -56,20 +57,22 @@ export async function getUniswapRefPrice(
   // Try each fee tier
   for (const fee of FEE_TIERS) {
     try {
-      const result = await publicClient.readContract({
-        address: QUOTER_V2_ADDRESS,
-        abi: QUOTER_ABI,
-        functionName: 'quoteExactInputSingle',
-        args: [
-          {
-            tokenIn,
-            tokenOut,
-            amountIn,
-            fee,
-            sqrtPriceLimitX96: 0n,
-          },
-        ],
-      }) as readonly [bigint, bigint, number, bigint];
+      const result = await withRetry(() =>
+        publicClient.readContract({
+          address: QUOTER_V2_ADDRESS,
+          abi: QUOTER_ABI,
+          functionName: 'quoteExactInputSingle',
+          args: [
+            {
+              tokenIn,
+              tokenOut,
+              amountIn,
+              fee,
+              sqrtPriceLimitX96: 0n,
+            },
+          ],
+        })
+      ) as readonly [bigint, bigint, number, bigint];
 
       const amountOut = result[0];
 

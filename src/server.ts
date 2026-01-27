@@ -15,7 +15,7 @@ import {
   resumeToken,
 } from './engine/reconciler.js';
 import { calculateLifetimePnL, calculateDailyPnL, formatVcred, formatEth } from './engine/accounting.js';
-import { TOKENS, type TokenId } from './tokens.js';
+import { TOKENS, type TokenId, validateTokenId } from './tokens.js';
 import { getExplorerTxUrl } from './chains.js';
 import { diag } from './logging.js';
 
@@ -139,16 +139,26 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
     return { success: true, paused: false };
   });
 
-  fastify.post<{ Body: { token: string } }>('/api/pause-token', async (req) => {
-    const token = req.body.token as TokenId;
-    pauseToken(token);
-    return { success: true, token, paused: true };
+  fastify.post<{ Body: { token: string } }>('/api/pause-token', async (req, reply) => {
+    try {
+      const token = validateTokenId(req.body.token);
+      pauseToken(token);
+      return { success: true, token, paused: true };
+    } catch {
+      reply.code(400);
+      return { success: false, error: 'Invalid token' };
+    }
   });
 
-  fastify.post<{ Body: { token: string } }>('/api/resume-token', async (req) => {
-    const token = req.body.token as TokenId;
-    resumeToken(token);
-    return { success: true, token, paused: false };
+  fastify.post<{ Body: { token: string } }>('/api/resume-token', async (req, reply) => {
+    try {
+      const token = validateTokenId(req.body.token);
+      resumeToken(token);
+      return { success: true, token, paused: false };
+    } catch {
+      reply.code(400);
+      return { success: false, error: 'Invalid token' };
+    }
   });
 
   // Serve static dashboard files if they exist

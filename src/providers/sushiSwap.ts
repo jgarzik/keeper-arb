@@ -3,6 +3,7 @@ import { type Clients, getPublicClient, getWalletClient, getNextNonce } from '..
 import { type SwapProvider, type SwapQuote } from './swapInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
+import { withRetry } from '../retry.js';
 
 // SushiSwap V2 Router ABI (Ethereum)
 const SUSHI_V2_ROUTER_ABI = parseAbi([
@@ -112,20 +113,22 @@ async function quoteV3(
   // Try each fee tier
   for (const fee of FEE_TIERS) {
     try {
-      const result = await publicClient.readContract({
-        address: quoterAddress,
-        abi: SUSHI_V3_QUOTER_ABI,
-        functionName: 'quoteExactInputSingle',
-        args: [
-          {
-            tokenIn,
-            tokenOut,
-            amountIn,
-            fee,
-            sqrtPriceLimitX96: 0n,
-          },
-        ],
-      }) as readonly [bigint, bigint, number, bigint];
+      const result = await withRetry(() =>
+        publicClient.readContract({
+          address: quoterAddress,
+          abi: SUSHI_V3_QUOTER_ABI,
+          functionName: 'quoteExactInputSingle',
+          args: [
+            {
+              tokenIn,
+              tokenOut,
+              amountIn,
+              fee,
+              sqrtPriceLimitX96: 0n,
+            },
+          ],
+        })
+      ) as readonly [bigint, bigint, number, bigint];
 
       const amountOut = result[0];
 
@@ -167,12 +170,14 @@ async function quoteV2(
   // Try direct path
   try {
     const path: Address[] = [tokenIn, tokenOut];
-    const amounts = await publicClient.readContract({
-      address: routerAddress,
-      abi: SUSHI_V2_ROUTER_ABI,
-      functionName: 'getAmountsOut',
-      args: [amountIn, path],
-    });
+    const amounts = await withRetry(() =>
+      publicClient.readContract({
+        address: routerAddress,
+        abi: SUSHI_V2_ROUTER_ABI,
+        functionName: 'getAmountsOut',
+        args: [amountIn, path],
+      })
+    );
 
     return { amountOut: amounts[amounts.length - 1], path };
   } catch {
@@ -180,12 +185,14 @@ async function quoteV2(
     if (tokenIn !== weth && tokenOut !== weth) {
       try {
         const pathWithHop: Address[] = [tokenIn, weth, tokenOut];
-        const amounts = await publicClient.readContract({
-          address: routerAddress,
-          abi: SUSHI_V2_ROUTER_ABI,
-          functionName: 'getAmountsOut',
-          args: [amountIn, pathWithHop],
-        });
+        const amounts = await withRetry(() =>
+          publicClient.readContract({
+            address: routerAddress,
+            abi: SUSHI_V2_ROUTER_ABI,
+            functionName: 'getAmountsOut',
+            args: [amountIn, pathWithHop],
+          })
+        );
 
         return { amountOut: amounts[amounts.length - 1], path: pathWithHop };
       } catch {

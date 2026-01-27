@@ -15,6 +15,7 @@ import { hemiMainnet, ethereumMainnet, CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '
 import { type Config } from './config.js';
 import { diag } from './logging.js';
 import { TOKENS, type TokenId, getTokenAddress } from './tokens.js';
+import { withRetry } from './retry.js';
 
 // ERC20 minimal ABI for balance checks
 const ERC20_ABI = [
@@ -56,8 +57,9 @@ export interface Clients {
   ethWallet: WalletClient<Transport, Chain, Account>;
 }
 
-// Nonce tracking per chain
+// Nonce tracking per chain with mutex to prevent race conditions
 const nonceCache: Map<number, bigint> = new Map();
+const nonceLocks: Map<number, Promise<void>> = new Map();
 
 export function initClients(config: Config): Clients {
   // Create account from private key or mnemonic
@@ -128,23 +130,43 @@ export function getWalletClient(clients: Clients, chainId: number): WalletClient
   }
 }
 
-// Nonce management
+// Nonce management with mutex to prevent race conditions
 export async function getNextNonce(clients: Clients, chainId: number): Promise<bigint> {
-  const publicClient = getPublicClient(clients, chainId);
+  // Wait for any pending lock on this chain
+  const existingLock = nonceLocks.get(chainId);
+  if (existingLock) {
+    await existingLock;
+  }
 
-  // Get onchain nonce
-  const onchainNonce = await publicClient.getTransactionCount({
-    address: clients.address,
+  // Create new lock
+  let releaseLock: () => void;
+  const lock = new Promise<void>((resolve) => {
+    releaseLock = resolve;
   });
+  nonceLocks.set(chainId, lock);
 
-  // Use max of cached and onchain
-  const cached = nonceCache.get(chainId) ?? 0n;
-  const next = cached >= BigInt(onchainNonce) ? cached : BigInt(onchainNonce);
+  try {
+    const publicClient = getPublicClient(clients, chainId);
 
-  // Increment cache
-  nonceCache.set(chainId, next + 1n);
+    // Get onchain nonce with retry for transient errors
+    const onchainNonce = await withRetry(() =>
+      publicClient.getTransactionCount({
+        address: clients.address,
+      })
+    );
 
-  return next;
+    // Use max of cached and onchain
+    const cached = nonceCache.get(chainId) ?? 0n;
+    const next = cached >= BigInt(onchainNonce) ? cached : BigInt(onchainNonce);
+
+    // Increment cache
+    nonceCache.set(chainId, next + 1n);
+
+    return next;
+  } finally {
+    releaseLock!();
+    nonceLocks.delete(chainId);
+  }
 }
 
 export function resetNonceCache(chainId?: number): void {

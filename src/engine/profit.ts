@@ -35,40 +35,39 @@ export async function estimateProfit(
   const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
   const tokenHemi = requireTokenAddress(token, CHAIN_ID_HEMI);
   const tokenEth = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
+  const wethHemi = requireTokenAddress('WETH', CHAIN_ID_HEMI);
 
-  // Step 1: Quote VCRED -> X on Hemi
-  const hemiSwapQuote = await sushiSwapHemi.quoteExactIn(
-    clients,
-    vcredAddress,
-    tokenHemi,
-    vcredIn
-  );
+  if (!tokenEth) {
+    throw new Error(`Token ${token} not available on Ethereum`);
+  }
+
+  const hemiPublic = getPublicClient(clients, CHAIN_ID_HEMI);
+  const ethPublic = getPublicClient(clients, CHAIN_ID_ETHEREUM);
+
+  // Group 1: First swap + gas prices + ETH/VCRED rate (all independent)
+  const [hemiSwapQuote, hemiGasPrice, ethGasPrice, ethToVcredQuote] = await Promise.all([
+    sushiSwapHemi.quoteExactIn(clients, vcredAddress, tokenHemi, vcredIn),
+    hemiPublic.getGasPrice(),
+    ethPublic.getGasPrice(),
+    sushiSwapHemi.quoteExactIn(clients, wethHemi, vcredAddress, 10n ** 18n).catch(() => null),
+  ]);
 
   if (!hemiSwapQuote) {
     throw new Error(`No Hemi swap quote for ${token}`);
   }
 
   const xOut = hemiSwapQuote.amountOut;
+  const ethToVcredRate = ethToVcredQuote?.amountOut ?? 1000n * 10n ** 18n;
 
-  // Step 2: Estimate bridge fee (X from Hemi to Ethereum)
-  let bridgeFeeOut = 0n;
-  if (tokenMeta.bridgeRouteOut === 'STARGATE_LZ') {
-    bridgeFeeOut = await stargateHemiToEth.estimateFee(clients, tokenHemi, xOut);
-  } else {
-    bridgeFeeOut = await hemiTunnelHemiToEth.estimateFee(clients, tokenHemi, xOut);
-  }
+  // Group 2: Bridge fee + ETH swap (both need xOut)
+  const bridgeFeeOutPromise = tokenMeta.bridgeRouteOut === 'STARGATE_LZ'
+    ? stargateHemiToEth.estimateFee(clients, tokenHemi, xOut)
+    : hemiTunnelHemiToEth.estimateFee(clients, tokenHemi, xOut);
 
-  // Step 3: Quote X -> USDC on Ethereum
-  if (!tokenEth) {
-    throw new Error(`Token ${token} not available on Ethereum`);
-  }
-
-  const ethSwapQuote = await sushiSwapEthereum.quoteExactIn(
-    clients,
-    tokenEth,
-    usdcEth,
-    xOut
-  );
+  const [bridgeFeeOut, ethSwapQuote] = await Promise.all([
+    bridgeFeeOutPromise,
+    sushiSwapEthereum.quoteExactIn(clients, tokenEth, usdcEth, xOut),
+  ]);
 
   if (!ethSwapQuote) {
     throw new Error(`No Ethereum swap quote for ${token} -> USDC`);
@@ -76,16 +75,11 @@ export async function estimateProfit(
 
   const usdcOut = ethSwapQuote.amountOut;
 
-  // Step 4: Estimate bridge fee (USDC back to Hemi via Stargate)
-  const bridgeFeeBack = await stargateEthToHemi.estimateFee(clients, usdcEth, usdcOut);
-
-  // Step 5: Quote USDC -> VCRED on Hemi (closing swap)
-  const closeSwapQuote = await sushiSwapHemi.quoteExactIn(
-    clients,
-    usdcHemi,
-    vcredAddress,
-    usdcOut
-  );
+  // Group 3: Bridge back + close swap (both need usdcOut)
+  const [bridgeFeeBack, closeSwapQuote] = await Promise.all([
+    stargateEthToHemi.estimateFee(clients, usdcEth, usdcOut),
+    sushiSwapHemi.quoteExactIn(clients, usdcHemi, vcredAddress, usdcOut),
+  ]);
 
   if (!closeSwapQuote) {
     throw new Error('No closing swap quote USDC -> VCRED');
@@ -93,39 +87,13 @@ export async function estimateProfit(
 
   const vcredOut = closeSwapQuote.amountOut;
 
-  // Step 6: Estimate gas costs
-  const hemiPublic = getPublicClient(clients, CHAIN_ID_HEMI);
-  const ethPublic = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-
-  const hemiGasPrice = await hemiPublic.getGasPrice();
-  const ethGasPrice = await ethPublic.getGasPrice();
-
-  // Estimate gas usage
+  // Calculate gas estimates
   const hemiSwapGas = 200000n;
   const ethSwapGas = 250000n;
   const bridgeGas = 150000n;
 
   const gasEstimateHemi = hemiGasPrice * (hemiSwapGas * 2n + bridgeGas); // 2 swaps + bridge init
   const gasEstimateEth = ethGasPrice * (ethSwapGas + bridgeGas); // 1 swap + bridge back
-
-  // Step 7: Convert all fees to VCRED
-  // Get VCRED/ETH price for conversion
-  const wethHemi = requireTokenAddress('WETH', CHAIN_ID_HEMI);
-  let ethToVcredRate = 1000n * 10n ** 18n; // Default: 1 ETH = 1000 VCRED
-
-  try {
-    const ethQuote = await sushiSwapHemi.quoteExactIn(
-      clients,
-      wethHemi,
-      vcredAddress,
-      10n ** 18n // 1 ETH
-    );
-    if (ethQuote) {
-      ethToVcredRate = ethQuote.amountOut;
-    }
-  } catch {
-    // Use default rate
-  }
 
   // Convert native gas fees to VCRED
   const totalNativeFees = gasEstimateHemi + gasEstimateEth + bridgeFeeOut + bridgeFeeBack;

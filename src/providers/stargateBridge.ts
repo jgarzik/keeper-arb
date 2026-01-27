@@ -1,5 +1,5 @@
 import { type Address, encodeFunctionData } from 'viem';
-import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
 import {
   type BridgeProvider,
   type BridgeTransaction,
@@ -7,11 +7,18 @@ import {
 } from './bridgeInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
+import { getTokenAddress } from '../tokens.js';
 
-// Stargate V2 contracts
-const STARGATE_ROUTER: Record<number, Address> = {
+// Stargate V2 contracts - Native ETH pool
+const STARGATE_POOL_NATIVE: Record<number, Address> = {
   [CHAIN_ID_ETHEREUM]: '0x77b2043768d28E9C9aB44E1aBfC95944bcE57931', // StargatePoolNative
   [CHAIN_ID_HEMI]: '0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590', // StargatePoolNative on Hemi
+};
+
+// Stargate V2 contracts - USDC OFT (Omnichain Fungible Token)
+const STARGATE_OFT_USDC: Record<number, Address> = {
+  [CHAIN_ID_ETHEREUM]: '0xc026395860Db2d07ee33e05fE50ed7bD583189C7',
+  [CHAIN_ID_HEMI]: '0x45f1A95A4D3f3836523F5c83673c797f4d4d263B',
 };
 
 // LayerZero Endpoint IDs
@@ -109,11 +116,29 @@ function addressToBytes32(addr: Address): `0x${string}` {
   return `0x${addr.slice(2).padStart(64, '0')}` as `0x${string}`;
 }
 
+/**
+ * Determine if a token uses the OFT (Omnichain Fungible Token) router
+ * Currently only USDC uses OFT; native ETH uses StargatePoolNative
+ */
+function isOftToken(chainId: number, token: Address): boolean {
+  const usdcAddress = getTokenAddress('USDC', chainId);
+  return usdcAddress !== undefined && token.toLowerCase() === usdcAddress.toLowerCase();
+}
+
+/**
+ * Get the appropriate Stargate router for a given token
+ */
+function getRouterForToken(chainId: number, token: Address): Address {
+  if (isOftToken(chainId, token)) {
+    return STARGATE_OFT_USDC[chainId];
+  }
+  return STARGATE_POOL_NATIVE[chainId];
+}
+
 function createStargateBridge(
   fromChainId: number,
   toChainId: number
 ): BridgeProvider {
-  const routerAddress = STARGATE_ROUTER[fromChainId];
   const dstEid = LZ_ENDPOINT_IDS[toChainId];
 
   return {
@@ -123,11 +148,12 @@ function createStargateBridge(
 
     async estimateFee(
       clients: Clients,
-      _token: Address,
+      token: Address,
       amount: bigint
     ): Promise<bigint> {
-      if (routerAddress === '0x0000000000000000000000000000000000000000') {
-        diag.warn('Stargate router not configured', { fromChainId });
+      const routerAddress = getRouterForToken(fromChainId, token);
+      if (!routerAddress) {
+        diag.warn('Stargate router not configured', { fromChainId, token });
         return 0n;
       }
 
@@ -155,26 +181,42 @@ function createStargateBridge(
 
         return result.nativeFee;
       } catch (err) {
-        diag.warn('Failed to quote Stargate fee', { error: String(err) });
+        diag.warn('Failed to quote Stargate fee', { error: String(err), token });
         return 0n;
       }
     },
 
     async send(
       clients: Clients,
-      _token: Address,
+      token: Address,
       amount: bigint,
       recipient: Address
     ): Promise<BridgeTransaction> {
-      if (routerAddress === '0x0000000000000000000000000000000000000000') {
-        throw new Error('Stargate router not configured for this chain');
+      const routerAddress = getRouterForToken(fromChainId, token);
+      if (!routerAddress) {
+        throw new Error('Stargate router not configured for this chain/token');
       }
 
       const walletClient = getWalletClient(clients, fromChainId);
       const publicClient = getPublicClient(clients, fromChainId);
-      const nonce = await getNextNonce(clients, fromChainId);
+      const useOft = isOftToken(fromChainId, token);
 
       const minAmount = (amount * 99n) / 100n;
+
+      // For OFT tokens (USDC), ensure approval before send
+      if (useOft) {
+        const currentAllowance = await getTokenAllowance(clients, fromChainId, token, routerAddress);
+        if (currentAllowance < amount) {
+          diag.info('Approving Stargate OFT router for token spend', {
+            token,
+            router: routerAddress,
+            amount: amount.toString(),
+          });
+          await approveToken(clients, fromChainId, token, routerAddress, amount);
+        }
+      }
+
+      const nonce = await getNextNonce(clients, fromChainId);
 
       // Get fee quote first
       const feeResult = await publicClient.readContract({
@@ -214,16 +256,22 @@ function createStargateBridge(
         ],
       });
 
+      // OFT tokens: value = nativeFee only (token transferred via approval)
+      // Native ETH: value = nativeFee + amount (ETH sent with transaction)
+      const txValue = useOft ? feeResult.nativeFee : feeResult.nativeFee + amount;
+
       const hash = await walletClient.sendTransaction({
         to: routerAddress,
         data,
-        value: feeResult.nativeFee + amount, // Native fee + amount for ETH bridge
+        value: txValue,
         nonce: Number(nonce),
       });
 
       diag.info('Stargate bridge tx submitted', {
         fromChainId,
         toChainId,
+        token,
+        isOft: useOft,
         amount: amount.toString(),
         fee: feeResult.nativeFee.toString(),
         txHash: hash,
@@ -233,7 +281,7 @@ function createStargateBridge(
         provider: this.name,
         fromChainId,
         toChainId,
-        token: _token,
+        token,
         amount,
         txHash: hash,
         status: 'sent',

@@ -117,3 +117,13 @@ export function requireTokenAddress(id: TokenId, chainId: number): Address {
   }
   return addr;
 }
+
+/**
+ * Validate a string as a TokenId (used for DB results and user input)
+ */
+export function validateTokenId(value: string): TokenId {
+  if (!(value in TOKENS)) {
+    throw new Error(`Invalid TokenId: ${value}`);
+  }
+  return value as TokenId;
+}

@@ -1,7 +1,7 @@
 import { type Clients, getTokenBalance } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { requireTokenAddress, getToken, type TokenId } from '../tokens.js';
+import { requireTokenAddress, getToken, type TokenId, validateTokenId } from '../tokens.js';
 import {
   getActiveCycles,
   createCycle,
@@ -69,6 +69,11 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
     return;
   }
 
+  if (state.running) {
+    diag.debug('Reconciler already running, skipping');
+    return;
+  }
+
   state.running = true;
   state.lastRun = new Date();
 
@@ -81,7 +86,7 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
 
     for (const cycle of cycles) {
       if (actionsThisLoop >= MAX_ACTIONS_PER_LOOP) break;
-      if (state.pausedTokens.has(cycle.token as TokenId)) continue;
+      if (state.pausedTokens.has(validateTokenId(cycle.token))) continue;
 
       const result = await processStateMachine(clients, config, cycle);
       if (result.actionTaken) {
@@ -119,7 +124,7 @@ async function processStateMachine(
   config: Config,
   cycle: Cycle
 ): Promise<ProcessResult> {
-  const token = cycle.token as TokenId;
+  const token = validateTokenId(cycle.token);
 
   switch (cycle.state) {
     case 'DETECTED': {
@@ -241,7 +246,7 @@ async function checkBridgeArrival(
   cycle: Cycle,
   destChainId: number
 ): Promise<boolean> {
-  const token = cycle.token as TokenId;
+  const token = validateTokenId(cycle.token);
   const tokenMeta = getToken(token);
   const tokenAddr = tokenMeta.addresses[destChainId];
 

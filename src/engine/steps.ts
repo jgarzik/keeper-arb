@@ -2,7 +2,7 @@ import { type Address } from 'viem';
 import { type Clients, getPublicClient, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { type TokenId, requireTokenAddress, getToken } from '../tokens.js';
+import { requireTokenAddress, getToken, validateTokenId } from '../tokens.js';
 import { sushiSwapHemi, sushiSwapEthereum } from '../providers/sushiSwap.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
@@ -30,9 +30,9 @@ async function ensureApproval(
   if (allowance < amount) {
     diag.info('Approving token', { chainId, token, spender });
     const hash = await approveToken(clients, chainId, token, spender, MAX_UINT256);
-    // Wait for confirmation
+    // Wait for confirmation with timeout
     const publicClient = getPublicClient(clients, chainId);
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
   }
 }
 
@@ -42,7 +42,7 @@ export async function executeHemiSwap(
   config: Config,
   cycle: Cycle
 ): Promise<StepResult> {
-  const token = cycle.token as TokenId;
+  const token = validateTokenId(cycle.token);
   const vcredIn = BigInt(cycle.vcredIn);
   const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);
   const tokenAddress = requireTokenAddress(token, CHAIN_ID_HEMI);
@@ -69,9 +69,9 @@ export async function executeHemiSwap(
     const txHash = await sushiSwapHemi.execute(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
-    // Wait for confirmation
+    // Wait for confirmation with timeout
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
     if (receipt.status === 'reverted') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
@@ -109,7 +109,7 @@ export async function executeBridgeOut(
   config: Config,
   cycle: Cycle
 ): Promise<StepResult> {
-  const token = cycle.token as TokenId;
+  const token = validateTokenId(cycle.token);
   const tokenMeta = getToken(token);
   const tokenAddress = requireTokenAddress(token, CHAIN_ID_HEMI);
   const amount = BigInt(cycle.xOut ?? '0');
@@ -128,9 +128,9 @@ export async function executeBridgeOut(
 
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
 
-    // Wait for source tx confirmation
+    // Wait for source tx confirmation with timeout
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
 
     if (receipt.status === 'reverted') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
@@ -168,7 +168,7 @@ export async function executeEthSwap(
   config: Config,
   cycle: Cycle
 ): Promise<StepResult> {
-  const token = cycle.token as TokenId;
+  const token = validateTokenId(cycle.token);
   const tokenMeta = getToken(token);
   const tokenEth = tokenMeta.addresses[CHAIN_ID_ETHEREUM];
   const usdcEth = requireTokenAddress('USDC', CHAIN_ID_ETHEREUM);
@@ -203,7 +203,7 @@ export async function executeEthSwap(
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
     if (receipt.status === 'reverted') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
@@ -254,7 +254,7 @@ export async function executeBridgeBack(
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
 
     if (receipt.status === 'reverted') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
@@ -309,7 +309,7 @@ export async function executeCloseSwap(
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
     if (receipt.status === 'reverted') {
       updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
