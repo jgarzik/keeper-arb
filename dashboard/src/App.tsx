@@ -383,6 +383,7 @@ function App() {
       '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
       '0x4200000000000000000000000000000000000006': 'WETH',
       '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC',
+      '0x03c7054bcb39f7b2e5b2c7acb37583e32d70cfa3': 'WBTC',
       '0xaa40c0c7644e0b2b224509571e10ad20d9c4ef28': 'hemiBTC',
       '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 'cbBTC',
       '0x1596be338b999e2376675c908168a7548c8b0525': 'cbBTC',
@@ -410,7 +411,8 @@ function App() {
         '0x028de74e2fe336511a8e5fab0426d1cfd5110dbb': 6, // XAUt Hemi
         '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 18, // WETH Eth
         '0x4200000000000000000000000000000000000006': 18, // WETH Hemi
-        '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 8, // WBTC
+        '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 8, // WBTC Eth
+        '0x03c7054bcb39f7b2e5b2c7acb37583e32d70cfa3': 8, // WBTC Hemi
         '0xaa40c0c7644e0b2b224509571e10ad20d9c4ef28': 8, // hemiBTC
         '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 8, // cbBTC Eth
         '0x1596be338b999e2376675c908168a7548c8b0525': 8, // cbBTC Hemi
