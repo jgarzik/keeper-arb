@@ -10,7 +10,7 @@ import {
   type Account,
   formatUnits,
 } from 'viem';
-import { privateKeyToAccount, mnemonicToAccount } from 'viem/accounts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { hemiMainnet, ethereumMainnet, CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from './chains.js';
 import { type Config } from './config.js';
 import { diag } from './logging.js';
@@ -62,15 +62,7 @@ const nonceCache: Map<number, bigint> = new Map();
 const nonceLocks: Map<number, Promise<void>> = new Map();
 
 export function initClients(config: Config): Clients {
-  // Create account from private key or mnemonic
-  let account: Account;
-  if (config.walletPrivateKey) {
-    account = privateKeyToAccount(config.walletPrivateKey as `0x${string}`);
-  } else if (config.walletMnemonic) {
-    account = mnemonicToAccount(config.walletMnemonic);
-  } else {
-    throw new Error('No wallet credentials provided');
-  }
+  const account = privateKeyToAccount(config.walletPrivateKey as `0x${string}`);
 
   diag.info('Wallet initialized', { address: account.address });
 

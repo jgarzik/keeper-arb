@@ -1,3 +1,15 @@
+# Docker Secrets Setup
+# ====================
+# This service uses Docker secrets for sensitive values.
+# Before running, create the secrets directory and files:
+#
+#   mkdir -p secrets
+#   echo "0xYOUR_PRIVATE_KEY_HERE" > secrets/private_key.txt
+#   echo "your-dashboard-password" > secrets/dashboard_password.txt
+#   chmod 600 secrets/*.txt
+#
+# Then run: docker compose up --build
+
 version: '3.8'
 
 services:
@@ -10,11 +22,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    secrets:
+      - ARBITRAGE_PRIVATE_KEY
+      - DASHBOARD_PASSWORD
     environment:
       - HEMI_RPC_URL=${HEMI_RPC_URL}
       - ETH_RPC_URL=${ETH_RPC_URL}
-      - ARBITRAGE_PRIVATE_KEY=${ARBITRAGE_PRIVATE_KEY}
-      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
       - WEBHOOK_URL=${WEBHOOK_URL:-}
       - MIN_SWAP_VCRED=${MIN_SWAP_VCRED:-100}
       - MAX_SWAP_VCRED_CAP=${MAX_SWAP_VCRED_CAP:-100000}
@@ -26,3 +39,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+secrets:
+  ARBITRAGE_PRIVATE_KEY:
+    file: ./secrets/private_key.txt
+  DASHBOARD_PASSWORD:
+    file: ./secrets/dashboard_password.txt

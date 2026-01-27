@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 import { RPC_URLS } from './rpc.js';
 
 export interface Config {
@@ -7,8 +8,7 @@ export interface Config {
   ethRpcUrl: string;
 
   // Wallet (loaded once, never logged)
-  walletPrivateKey?: string;
-  walletMnemonic?: string;
+  walletPrivateKey: string;
 
   // Dashboard
   dashboardPort: number;
@@ -31,14 +31,6 @@ export interface Config {
   logsDir: string;
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
 function optionalEnv(name: string, defaultValue: string): string {
   return process.env[name] ?? defaultValue;
 }
@@ -47,22 +39,31 @@ function parseBigInt(value: string): bigint {
   return BigInt(value);
 }
 
-export function loadConfig(): Config {
-  const privateKey = process.env.ARBITRAGE_PRIVATE_KEY;
-  const mnemonic = process.env.ARBITRAGE_MNEMONIC;
-  if (!privateKey && !mnemonic) {
-    throw new Error('Either ARBITRAGE_PRIVATE_KEY or ARBITRAGE_MNEMONIC must be set');
+function readSecret(name: string): string {
+  const path = `/run/secrets/${name}`;
+  try {
+    const value = readFileSync(path, 'utf8').trim();
+    if (!value) {
+      throw new Error(`Docker secret ${name} is empty`);
+    }
+    return value;
+  } catch (err: unknown) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+      throw new Error(`Missing required Docker secret: ${name} (expected at ${path})`);
+    }
+    throw err;
   }
+}
 
+export function loadConfig(): Config {
   return {
     hemiRpcUrl: process.env.HEMI_RPC_URL || RPC_URLS.hemi,
     ethRpcUrl: process.env.ETH_RPC_URL || RPC_URLS.ethereum,
 
-    walletPrivateKey: privateKey,
-    walletMnemonic: mnemonic,
+    walletPrivateKey: readSecret('ARBITRAGE_PRIVATE_KEY'),
 
     dashboardPort: parseInt(optionalEnv('DASHBOARD_PORT', '3000'), 10),
-    dashboardPassword: requireEnv('DASHBOARD_PASSWORD'),
+    dashboardPassword: readSecret('DASHBOARD_PASSWORD'),
 
     webhookUrl: process.env.WEBHOOK_URL,
 
