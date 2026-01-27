@@ -1,4 +1,5 @@
 import { type Chain } from 'viem';
+import { RPC_URLS } from './rpc.js';
 
 export const CHAIN_ID_HEMI = 43111;
 export const CHAIN_ID_ETHEREUM = 1;
@@ -13,7 +14,7 @@ export const hemiMainnet: Chain = {
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.hemi.network/rpc'],
+      http: [RPC_URLS.hemi],
     },
   },
   blockExplorers: {
@@ -34,7 +35,7 @@ export const ethereumMainnet: Chain = {
   },
   rpcUrls: {
     default: {
-      http: ['https://eth.llamarpc.com'],
+      http: [RPC_URLS.ethereum],
     },
   },
   blockExplorers: {

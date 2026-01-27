@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { RPC_URLS } from './rpc.js';
 
 export interface Config {
   // RPC endpoints
@@ -54,8 +55,8 @@ export function loadConfig(): Config {
   }
 
   return {
-    hemiRpcUrl: requireEnv('HEMI_RPC_URL'),
-    ethRpcUrl: requireEnv('ETH_RPC_URL'),
+    hemiRpcUrl: process.env.HEMI_RPC_URL || RPC_URLS.hemi,
+    ethRpcUrl: process.env.ETH_RPC_URL || RPC_URLS.ethereum,
 
     walletPrivateKey: privateKey,
     walletMnemonic: mnemonic,
