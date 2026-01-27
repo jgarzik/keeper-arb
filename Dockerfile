@@ -23,8 +23,10 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Create non-root user
-RUN groupadd -r keeper && useradd -r -g keeper keeper
+# Install curl for health checks and create non-root user
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r keeper && useradd -r -g keeper keeper
 
 # Install production dependencies only
 COPY package*.json ./
@@ -52,6 +54,6 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:7120/api/status || exit 1
+  CMD curl -f http://localhost:7120/health || exit 1
 
 CMD ["node", "dist/index.js"]

@@ -39,13 +39,20 @@ async function main(): Promise<void> {
   const clients = initClients(config);
   diag.info('Wallet connected', { address: clients.address });
 
-  // Handle shutdown
+  // Handle shutdown gracefully - wait for in-flight operations
+    let shuttingDown = false;
     const shutdown = async () => {
-      diag.info('Shutting down...');
+      if (shuttingDown) return; // Prevent multiple shutdown calls
+      shuttingDown = true;
+      diag.info('Shutting down gracefully...');
       if (reconcilerTimer) {
         stopReconciler(reconcilerTimer);
       }
+      // Wait for any pending reconciliation to complete
+      diag.info('Waiting for pending operations to complete...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       releaseLock();
+      diag.info('Shutdown complete');
       process.exit(0);
     };
     process.on('SIGINT', shutdown);

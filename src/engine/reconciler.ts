@@ -342,12 +342,16 @@ export function startReconciler(
 ): NodeJS.Timeout {
   diag.info('Starting reconciler', { intervalMs: config.reconcileIntervalMs });
 
-  // Run immediately
-  reconcile(clients, config);
+  // Run immediately (with error handler)
+  reconcile(clients, config).catch(err => {
+    diag.error('Reconcile initial run error', { error: err instanceof Error ? err.message : String(err) });
+  });
 
-  // Then run on interval
+  // Then run on interval with error handler
   return setInterval(() => {
-    reconcile(clients, config);
+    reconcile(clients, config).catch(err => {
+      diag.error('Reconcile loop error', { error: err instanceof Error ? err.message : String(err) });
+    });
   }, config.reconcileIntervalMs);
 }
 

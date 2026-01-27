@@ -49,9 +49,9 @@ export async function executeHemiSwap(
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash, error: 'Transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash, error: `Transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {
@@ -114,9 +114,9 @@ export async function executeBridgeOut(
       const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
       const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
 
-      if (receipt.status === 'reverted') {
-        updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-        return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
+      if (receipt.status !== 'success') {
+        updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+        return { success: false, txHash: bridgeTx.txHash, error: `Transaction failed: ${receipt.status}` };
       }
 
       updateStep(step.id, {
@@ -195,9 +195,9 @@ export async function executeEthSwap(
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash, error: 'Transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash, error: `Transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {
@@ -246,9 +246,9 @@ export async function executeBridgeBack(
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
     const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash: bridgeTx.txHash, error: 'Transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash: bridgeTx.txHash, error: `Transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {
@@ -301,9 +301,9 @@ export async function executeCloseSwap(
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash, error: 'Transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash, error: `Transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {
@@ -369,9 +369,9 @@ export async function executeProveWithdrawal(
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
     const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash: hash, error: 'Prove transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash: hash, error: `Prove transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {
@@ -433,9 +433,9 @@ export async function executeFinalizeWithdrawal(
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
     const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
 
-    if (receipt.status === 'reverted') {
-      updateStep(step.id, { status: 'failed', error: 'Transaction reverted' });
-      return { success: false, txHash: hash, error: 'Finalize transaction reverted' };
+    if (receipt.status !== 'success') {
+      updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
+      return { success: false, txHash: hash, error: `Finalize transaction failed: ${receipt.status}` };
     }
 
     updateStep(step.id, {

@@ -3,6 +3,7 @@ import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
 import { CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
+import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
 
 /**
  * 0x Swap API v2 provider - aggregates liquidity from Curve, Uniswap, Balancer, etc.
@@ -81,8 +82,15 @@ class ZeroXApiProvider implements ApiSwapProvider {
       }
 
       const { transaction } = response;
+
+      // Validate API response fields
+      const validatedTo = validateAddress(transaction.to, '0x.transaction.to');
+      const validatedData = validateHex(transaction.data, '0x.transaction.data');
+      const validatedBuyAmount = validateBigInt(response.buyAmount, '0x.buyAmount');
+      const validatedValue = validateOptionalBigInt(transaction.value, '0x.transaction.value');
       // Spender from allowance issues, or fallback to tx.to
-      const spender = response.issues?.allowance?.spender || transaction.to;
+      const spenderRaw = response.issues?.allowance?.spender || transaction.to;
+      const validatedSpender = validateAddress(spenderRaw, '0x.spender');
 
       const quote: ApiSwapQuote = {
         provider: this.name,
@@ -90,13 +98,13 @@ class ZeroXApiProvider implements ApiSwapProvider {
         tokenIn,
         tokenOut,
         amountIn,
-        amountOut: BigInt(response.buyAmount),
+        amountOut: validatedBuyAmount,
         tx: {
-          to: transaction.to as Address,
-          data: transaction.data as `0x${string}`,
-          value: BigInt(transaction.value || '0'),
+          to: validatedTo,
+          data: validatedData,
+          value: validatedValue,
         },
-        spender: spender as Address,
+        spender: validatedSpender,
       };
 
       // Log which sources contributed (Curve, Uniswap, etc.)

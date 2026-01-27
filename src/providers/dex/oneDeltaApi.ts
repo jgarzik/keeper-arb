@@ -3,6 +3,7 @@ import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
 import { CHAIN_ID_HEMI } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
+import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
 
 /**
  * 1delta API provider for Hemi swaps
@@ -75,19 +76,29 @@ class OneDeltaApiProvider implements ApiSwapProvider {
         return null;
       }
 
+      // Validate API response fields
+      const validatedTo = validateAddress(response.to, '1delta.to');
+      const validatedData = validateHex(response.data, '1delta.data');
+      const validatedBuyAmount = validateBigInt(response.buyAmount, '1delta.buyAmount');
+      const validatedValue = validateOptionalBigInt(response.value, '1delta.value');
+      const validatedSpender = validateAddress(
+        response.allowanceTarget || response.to,
+        '1delta.spender'
+      );
+
       const quote: ApiSwapQuote = {
         provider: this.name,
         chainId,
         tokenIn,
         tokenOut,
         amountIn,
-        amountOut: BigInt(response.buyAmount),
+        amountOut: validatedBuyAmount,
         tx: {
-          to: response.to as Address,
-          data: response.data as `0x${string}`,
-          value: BigInt(response.value || '0'),
+          to: validatedTo,
+          data: validatedData,
+          value: validatedValue,
         },
-        spender: (response.allowanceTarget || response.to) as Address,
+        spender: validatedSpender,
       };
 
       diag.debug('1delta API quote', {

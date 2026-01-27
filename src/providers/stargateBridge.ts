@@ -1,5 +1,5 @@
 import { type Address, encodeFunctionData } from 'viem';
-import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import {
   type BridgeProvider,
   type BridgeTransaction,
@@ -264,7 +264,7 @@ function createStargateBridge(
         to: routerAddress,
         data,
         value: txValue,
-        nonce: Number(nonce),
+        nonce: safeNonceToNumber(nonce),
       });
 
       diag.info('Stargate bridge tx submitted', {
@@ -298,7 +298,7 @@ function createStargateBridge(
         const receipt = await publicClient.getTransactionReceipt({
           hash: tx.txHash,
         });
-        if (receipt.status === 'reverted') {
+        if (receipt.status !== 'success') {
           return 'failed';
         }
       } catch {

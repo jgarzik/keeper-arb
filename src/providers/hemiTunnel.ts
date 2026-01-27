@@ -6,7 +6,7 @@ import {
   walletActionsL1,
   getWithdrawals,
 } from 'viem/op-stack';
-import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import {
   type BridgeProvider,
   type BridgeTransaction,
@@ -200,7 +200,7 @@ function createHemiTunnelBridge(
       const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
       const walletClient = getWalletClient(clients, CHAIN_ID_HEMI);
 
-      // Ensure token approval for bridge
+      // Ensure token approval for bridge (exact amount only, not infinite)
       const allowance = await getTokenAllowance(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE);
       if (allowance < amount) {
         diag.info('Approving token for Hemi tunnel bridge', {
@@ -208,7 +208,7 @@ function createHemiTunnelBridge(
           spender: HEMI_L2_STANDARD_BRIDGE,
           amount: amount.toString(),
         });
-        const approvalHash = await approveToken(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE, amount * 2n);
+        const approvalHash = await approveToken(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE, amount);
         await publicClient.waitForTransactionReceipt({ hash: approvalHash, timeout: 120_000 });
       }
 
@@ -251,7 +251,7 @@ function createHemiTunnelBridge(
         gas,
         maxFeePerGas: fees.maxFeePerGas,
         maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-        nonce: Number(nonce),
+        nonce: safeNonceToNumber(nonce),
       });
 
       // Wait for receipt and extract withdrawalHash
@@ -311,7 +311,7 @@ function createHemiTunnelBridge(
         const receipt = await l2Client.getTransactionReceipt({
           hash: tx.txHash,
         });
-        if (receipt.status === 'reverted') {
+        if (receipt.status !== 'success') {
           return 'failed';
         }
 

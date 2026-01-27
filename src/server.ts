@@ -24,6 +24,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export async function startServer(config: Config, clients: Clients): Promise<void> {
   const fastify = Fastify({ logger: false });
 
+  // Health check - no auth required
+  fastify.get('/health', async () => ({ status: 'ok' }));
+
   // Basic auth
   await fastify.register(fastifyBasicAuth, {
     validate: async (username, password) => {
@@ -34,8 +37,14 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
     authenticate: true,
   });
 
-  // Protect all routes
-  fastify.addHook('onRequest', fastify.basicAuth);
+  // Protect all routes except health check
+  fastify.addHook('onRequest', (request, reply, done) => {
+    if (request.url === '/health') {
+      done();
+      return;
+    }
+    fastify.basicAuth(request, reply, done);
+  });
 
   // API routes
   // Token metadata API for frontend (avoids hardcoded decimals)

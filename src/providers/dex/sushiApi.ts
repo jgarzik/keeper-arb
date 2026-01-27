@@ -3,6 +3,7 @@ import { type ApiSwapProvider, type ApiSwapQuote } from '../swapInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
+import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
 
 const SUSHI_API_BASE = 'https://api.sushi.com/swap/v7';
 
@@ -69,19 +70,25 @@ class SushiApiProvider implements ApiSwapProvider {
         return null;
       }
 
+      // Validate API response fields
+      const validatedTo = validateAddress(response.tx.to, 'sushi.tx.to');
+      const validatedData = validateHex(response.tx.data, 'sushi.tx.data');
+      const validatedAmountOut = validateBigInt(response.assumedAmountOut, 'sushi.assumedAmountOut');
+      const validatedValue = validateOptionalBigInt(response.tx.value, 'sushi.tx.value');
+
       const quote: ApiSwapQuote = {
         provider: this.name,
         chainId,
         tokenIn,
         tokenOut,
         amountIn,
-        amountOut: BigInt(response.assumedAmountOut),
+        amountOut: validatedAmountOut,
         tx: {
-          to: response.tx.to as Address,
-          data: response.tx.data as `0x${string}`,
-          value: BigInt(response.tx.value || '0'),
+          to: validatedTo,
+          data: validatedData,
+          value: validatedValue,
         },
-        spender: response.tx.to as Address,
+        spender: validatedTo,
         priceImpact: response.priceImpact,
       };
 

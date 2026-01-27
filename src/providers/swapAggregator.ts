@@ -1,10 +1,8 @@
 import { type Address } from 'viem';
-import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenAllowance, approveToken } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import { type ApiSwapProvider, type ApiSwapQuote } from './swapInterface.js';
-import { sushiApiProvider, eisenApiProvider, zeroXApiProvider, oneDeltaApiProvider } from './dex/index.js';
+import { sushiApiProvider, zeroXApiProvider, oneDeltaApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
-
-const MAX_UINT256 = 2n ** 256n - 1n;
 
 // All available API providers
 // NOTE: Eisen disabled - requires authentication (401 Unauthorized)
@@ -82,7 +80,7 @@ export async function getBestSwapQuote(
 }
 
 /**
- * Ensure token approval for a spender
+ * Ensure token approval for a spender (exact amount only, not infinite)
  */
 async function ensureApproval(
   clients: Clients,
@@ -93,8 +91,8 @@ async function ensureApproval(
 ): Promise<void> {
   const allowance = await getTokenAllowance(clients, chainId, token, spender);
   if (allowance < amount) {
-    diag.info('Approving token for swap', { chainId, token, spender });
-    const hash = await approveToken(clients, chainId, token, spender, MAX_UINT256);
+    diag.info('Approving token for swap', { chainId, token, spender, amount: amount.toString() });
+    const hash = await approveToken(clients, chainId, token, spender, amount);
     const publicClient = getPublicClient(clients, chainId);
     await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
   }
@@ -132,7 +130,7 @@ export async function executeSwap(
     to: tx.to,
     data: tx.data,
     value: tx.value,
-    nonce: Number(nonce),
+    nonce: safeNonceToNumber(nonce),
   });
 
   diag.info('Swap tx submitted', {

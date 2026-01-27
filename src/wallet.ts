@@ -226,7 +226,7 @@ export async function approveToken(
     abi: ERC20_ABI,
     functionName: 'approve',
     args: [spender, amount],
-    nonce: Number(nonce),
+    nonce: safeNonceToNumber(nonce),
   });
 
   diag.info('Token approval submitted', {
@@ -273,4 +273,15 @@ export async function getAllBalances(clients: Clients): Promise<BalanceSnapshot[
 
 export function formatBalance(amount: bigint, decimals: number): string {
   return formatUnits(amount, decimals);
+}
+
+/**
+ * Safely convert nonce from bigint to number.
+ * Throws if nonce exceeds MAX_SAFE_INTEGER to prevent precision loss.
+ */
+export function safeNonceToNumber(nonce: bigint): number {
+  if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`Nonce overflow: ${nonce} exceeds safe integer limit`);
+  }
+  return Number(nonce);
 }
