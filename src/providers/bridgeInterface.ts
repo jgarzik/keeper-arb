@@ -21,6 +21,7 @@ export interface BridgeTransaction {
   status: BridgeStatus;
   // For Hemi tunnel
   withdrawalHash?: `0x${string}`;
+  withdrawalData?: string; // JSON: {nonce, sender, target, value, gasLimit, data}
   proveHash?: `0x${string}`;
   finalizeHash?: `0x${string}`;
 }

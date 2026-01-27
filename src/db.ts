@@ -45,6 +45,7 @@ export interface Step {
   gasPrice: string | null;
   error: string | null;
   withdrawalHash: string | null;
+  withdrawalData: string | null; // JSON: {nonce, sender, target, value, gasLimit, data}
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +81,14 @@ export function initDb(dataDir: string): Database.Database {
   ).get() as { cnt: number };
   if (hasCol.cnt === 0) {
     db.exec('ALTER TABLE steps ADD COLUMN withdrawalHash TEXT');
+  }
+
+  // Migration: add withdrawalData column to steps if missing
+  const hasWithdrawalData = db.prepare(
+    "SELECT COUNT(*) as cnt FROM pragma_table_info('steps') WHERE name='withdrawalData'"
+  ).get() as { cnt: number };
+  if (hasWithdrawalData.cnt === 0) {
+    db.exec('ALTER TABLE steps ADD COLUMN withdrawalData TEXT');
   }
 
   diag.info('Database initialized', { path: dbPath });
@@ -129,6 +138,7 @@ function createSchema(db: Database.Database): void {
       gasPrice TEXT,
       error TEXT,
       withdrawalHash TEXT,
+      withdrawalData TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -299,7 +309,7 @@ export function getStep(id: number): Step | undefined {
 
 export function updateStep(
   id: number,
-  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string; withdrawalHash?: string }
+  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string; withdrawalHash?: string; withdrawalData?: string }
 ): void {
   const d = getDb();
   const now = new Date().toISOString();
@@ -329,6 +339,10 @@ export function updateStep(
   if (updates.withdrawalHash !== undefined) {
     sets.push('withdrawalHash = ?');
     values.push(updates.withdrawalHash);
+  }
+  if (updates.withdrawalData !== undefined) {
+    sets.push('withdrawalData = ?');
+    values.push(updates.withdrawalData);
   }
 
   values.push(id.toString());

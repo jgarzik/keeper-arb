@@ -17,6 +17,9 @@ import {
   executeEthSwap,
   executeBridgeBack,
   executeCloseSwap,
+  executeProveWithdrawal,
+  executeFinalizeWithdrawal,
+  checkFinalizationReady,
 } from './steps.js';
 import { recordCycleCompletion } from './accounting.js';
 
@@ -159,23 +162,46 @@ async function processStateMachine(
     }
 
     case 'BRIDGE_OUT_PROVE_REQUIRED': {
-      // Hemi tunnel: need to prove withdrawal
-      diag.warn('Cycle requires prove step', { cycleId: cycle.id, token });
-      // Prove step needs manual intervention or SDK integration
-      return { actionTaken: false };
+      // Hemi tunnel: execute prove withdrawal
+      const result = await executeProveWithdrawal(clients, config, cycle);
+      if (result.success && result.newState) {
+        updateCycleState(cycle.id, result.newState);
+      } else if (!result.success) {
+        // Log but don't fail cycle - will retry on next loop
+        diag.warn('Prove withdrawal failed, will retry', {
+          cycleId: cycle.id,
+          token,
+          error: result.error,
+        });
+      }
+      return { actionTaken: result.success };
     }
 
     case 'BRIDGE_OUT_PROVED': {
-      // Check if finalization period has passed
-      updateCycleState(cycle.id, 'BRIDGE_OUT_FINALIZE_REQUIRED');
+      // Check if finalization period has passed (1 day for Hemi)
+      const canFinalize = await checkFinalizationReady(clients, cycle);
+      if (canFinalize) {
+        updateCycleState(cycle.id, 'BRIDGE_OUT_FINALIZE_REQUIRED');
+        return { actionTaken: true };
+      }
+      diag.debug('Waiting for challenge period to pass', { cycleId: cycle.id, token });
       return { actionTaken: false };
     }
 
     case 'BRIDGE_OUT_FINALIZE_REQUIRED': {
-      // Hemi tunnel: need to finalize withdrawal
-      diag.warn('Cycle requires finalize step', { cycleId: cycle.id, token });
-      // Finalize step needs manual intervention or SDK integration
-      return { actionTaken: false };
+      // Hemi tunnel: execute finalize withdrawal
+      const result = await executeFinalizeWithdrawal(clients, config, cycle);
+      if (result.success && result.newState) {
+        updateCycleState(cycle.id, result.newState);
+      } else if (!result.success) {
+        // Log but don't fail cycle - will retry on next loop
+        diag.warn('Finalize withdrawal failed, will retry', {
+          cycleId: cycle.id,
+          token,
+          error: result.error,
+        });
+      }
+      return { actionTaken: result.success };
     }
 
     case 'ON_ETHEREUM': {

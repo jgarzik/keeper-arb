@@ -1,4 +1,11 @@
-import { type Address, encodeFunctionData, parseEventLogs } from 'viem';
+import { type Address, defineChain, encodeFunctionData, parseEventLogs } from 'viem';
+import { chainConfig } from 'viem/op-stack';
+import {
+  publicActionsL1,
+  publicActionsL2,
+  walletActionsL1,
+  getWithdrawals,
+} from 'viem/op-stack';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken } from '../wallet.js';
 import {
   type BridgeProvider,
@@ -7,6 +14,21 @@ import {
 } from './bridgeInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
+
+// Define Hemi as an OP-stack chain for viem's OP utilities
+const hemiOpStack = defineChain({
+  ...chainConfig,
+  id: CHAIN_ID_HEMI,
+  name: 'Hemi',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.hemi.network/rpc'] } },
+  contracts: {
+    ...chainConfig.contracts,
+    portal: { [CHAIN_ID_ETHEREUM]: { address: '0x39a0005415256B9863aFE2d55Edcf75ECc3A4D7e' as const } },
+    l2OutputOracle: { [CHAIN_ID_ETHEREUM]: { address: '0x6daF3a3497D8abdFE12915aDD9829f83A79C0d51' as const } },
+  },
+  sourceId: CHAIN_ID_ETHEREUM, // Ethereum mainnet
+});
 
 // Hemi OP-stack bridge contracts (from constants.rs)
 const _HEMI_L1_STANDARD_BRIDGE: Address = '0x5eaa10F99e7e6D177eF9F74E519E319aa49f191e';
@@ -239,6 +261,7 @@ function createHemiTunnelBridge(
       });
 
       let withdrawalHash: `0x${string}` | undefined;
+      let withdrawalData: string | undefined;
       if (receipt.status === 'success') {
         const logs = parseEventLogs({
           abi: [MESSAGE_PASSED_EVENT],
@@ -246,6 +269,15 @@ function createHemiTunnelBridge(
         });
         if (logs.length > 0) {
           withdrawalHash = logs[0].args.withdrawalHash as `0x${string}`;
+          // Store all withdrawal event data for prove/finalize steps
+          withdrawalData = JSON.stringify({
+            nonce: logs[0].args.nonce!.toString(),
+            sender: logs[0].args.sender,
+            target: logs[0].args.target,
+            value: logs[0].args.value!.toString(),
+            gasLimit: logs[0].args.gasLimit!.toString(),
+            data: logs[0].args.data,
+          });
         }
       }
 
@@ -265,6 +297,7 @@ function createHemiTunnelBridge(
         txHash: hash,
         status: receipt.status === 'success' ? 'sent' : 'failed',
         withdrawalHash,
+        withdrawalData,
       };
     },
 
@@ -303,10 +336,10 @@ function createHemiTunnelBridge(
             }) as readonly [string, bigint, bigint];
 
             if (proven[1] > 0n) {
-              // Check if enough time has passed for finalization (typically 7 days)
+              // Check if enough time has passed for finalization (1 day for Hemi)
               const timestamp = proven[1];
               const now = BigInt(Math.floor(Date.now() / 1000));
-              const finalizationPeriod = 604800n; // 7 days in seconds
+              const finalizationPeriod = 86400n; // 1 day in seconds (Hemi challenge period)
 
               if (now >= timestamp + finalizationPeriod) {
                 // Check if finalized by checking destination balance
@@ -330,36 +363,73 @@ function createHemiTunnelBridge(
       clients: Clients,
       tx: BridgeTransaction
     ): Promise<`0x${string}`> {
-      // This requires:
-      // 1. Getting the L2 output root proof from Hemi's dispute game / L2OutputOracle
-      // 2. Getting the withdrawal proof via eth_getProof
-      // This is complex and typically requires an SDK or manual construction
+      // Extend clients with OP-stack actions
+      const l1Client = getPublicClient(clients, CHAIN_ID_ETHEREUM).extend(publicActionsL1());
+      const l2Client = getPublicClient(clients, CHAIN_ID_HEMI).extend(publicActionsL2());
+      const l1Wallet = getWalletClient(clients, CHAIN_ID_ETHEREUM).extend(walletActionsL1());
 
-      diag.warn('Prove step requires manual intervention or SDK integration', {
+      // Get the original L2 transaction receipt
+      const receipt = await l2Client.getTransactionReceipt({ hash: tx.txHash });
+
+      diag.info('Waiting for L2 output to be posted (may take time if not ready)', {
         txHash: tx.txHash,
       });
 
-      // Placeholder - in production, use viem's OP stack utilities or SDK
-      throw new Error(
-        'Prove step not yet automated. Use Hemi bridge UI or SDK to prove withdrawal.'
-      );
+      // Wait for L2 output to be posted on L1 (may already be ready)
+      const { output, withdrawal } = await l1Client.waitToProve({
+        receipt,
+        targetChain: hemiOpStack,
+      });
+
+      // Build the prove withdrawal args
+      const args = await l2Client.buildProveWithdrawal({
+        output,
+        withdrawal,
+      });
+
+      // Submit prove transaction on L1 (use portalAddress directly, omit targetChain)
+      const { targetChain: _targetChain, ...proveArgs } = args;
+      const hash = await l1Wallet.proveWithdrawal({
+        ...proveArgs,
+        portalAddress: HEMI_OPTIMISM_PORTAL,
+      });
+
+      diag.info('Prove withdrawal submitted', {
+        txHash: tx.txHash,
+        proveTxHash: hash,
+      });
+
+      return hash;
     },
 
     async finalize(
       clients: Clients,
       tx: BridgeTransaction
     ): Promise<`0x${string}`> {
-      // This requires the withdrawal transaction details
-      // Typically obtained from the original withdrawal event
+      // Extend clients with OP-stack actions
+      const l2Client = getPublicClient(clients, CHAIN_ID_HEMI).extend(publicActionsL2());
+      const l1Wallet = getWalletClient(clients, CHAIN_ID_ETHEREUM).extend(walletActionsL1());
 
-      diag.warn('Finalize step requires withdrawal tx details', {
-        txHash: tx.txHash,
+      // Get the original L2 transaction receipt and extract withdrawal
+      const receipt = await l2Client.getTransactionReceipt({ hash: tx.txHash });
+      const [withdrawal] = getWithdrawals(receipt);
+
+      if (!withdrawal) {
+        throw new Error(`No withdrawal found in transaction ${tx.txHash}`);
+      }
+
+      // Submit finalize transaction on L1
+      const hash = await l1Wallet.finalizeWithdrawal({
+        withdrawal,
+        portalAddress: HEMI_OPTIMISM_PORTAL,
       });
 
-      // Placeholder - in production, decode the original tx and call finalizeWithdrawalTransaction
-      throw new Error(
-        'Finalize step not yet automated. Use Hemi bridge UI or SDK to finalize withdrawal.'
-      );
+      diag.info('Finalize withdrawal submitted', {
+        txHash: tx.txHash,
+        finalizeTxHash: hash,
+      });
+
+      return hash;
     },
 
     async detectArrival(
