@@ -10,6 +10,10 @@ let reconcilerTimer: NodeJS.Timeout | null = null;
 async function main(): Promise<void> {
   diag.info('keeper-arb starting');
 
+  let lockAcquired = false;
+
+  try {
+
   // Load config
   const config = loadConfig();
   diag.info('Config loaded', {
@@ -25,26 +29,27 @@ async function main(): Promise<void> {
   initDb(config.dataDir);
 
   // Acquire single-instance lock
-  if (!acquireLock()) {
-    diag.error('Failed to acquire lock - another instance may be running');
-    process.exit(1);
-  }
+    if (!acquireLock()) {
+      diag.error('Failed to acquire lock - another instance may be running');
+      process.exit(1);
+    }
+    lockAcquired = true;
 
   // Init wallet and clients
   const clients = initClients(config);
   diag.info('Wallet connected', { address: clients.address });
 
   // Handle shutdown
-  const shutdown = async () => {
-    diag.info('Shutting down...');
-    if (reconcilerTimer) {
-      stopReconciler(reconcilerTimer);
-    }
-    releaseLock();
-    process.exit(0);
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+    const shutdown = async () => {
+      diag.info('Shutting down...');
+      if (reconcilerTimer) {
+        stopReconciler(reconcilerTimer);
+      }
+      releaseLock();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 
   // Start dashboard server
   await startServer(config, clients);
@@ -58,7 +63,13 @@ async function main(): Promise<void> {
   });
 
   // Keep process alive
-  await new Promise(() => {});
+    await new Promise(() => {});
+  } catch (err) {
+    if (lockAcquired) {
+      releaseLock();
+    }
+    throw err;
+  }
 }
 
 main().catch((err) => {

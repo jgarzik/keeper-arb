@@ -64,7 +64,7 @@ export function loadConfig(): Config {
 
     walletPrivateKey: readSecret('ARBITRAGE_PRIVATE_KEY'),
 
-    dashboardPort: parseInt(optionalEnv('DASHBOARD_PORT', '3000'), 10),
+    dashboardPort: parseInt(optionalEnv('DASHBOARD_PORT', '7120'), 10),
     dashboardPassword: readSecret('DASHBOARD_PASSWORD'),
 
     webhookUrl: process.env.WEBHOOK_URL,

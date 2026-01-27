@@ -37,19 +37,21 @@ COPY --from=builder /app/dashboard/dist ./dashboard/dist
 # Create data directories
 RUN mkdir -p data logs && chown -R keeper:keeper /app
 
-# Switch to non-root user
-USER keeper
-
 # Environment
 ENV NODE_ENV=production
 ENV DATA_DIR=/app/data
 ENV LOGS_DIR=/app/logs
-ENV DASHBOARD_PORT=3000
+ENV DASHBOARD_PORT=7120
 
-EXPOSE 3000
+EXPOSE 7120
+
+# Entrypoint drops privileges after fixing mounts
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/status || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:7120/api/status || exit 1
 
 CMD ["node", "dist/index.js"]
