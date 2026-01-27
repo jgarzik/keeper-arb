@@ -12,24 +12,26 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
-    "viem": "^2.21.0",
-    "better-sqlite3": "^11.6.0",
-    "fastify": "^5.1.0",
-    "@fastify/static": "^8.0.0",
     "@fastify/basic-auth": "^6.0.0",
-    "dotenv": "^16.4.5"
+    "@fastify/static": "^8.0.0",
+    "better-sqlite3": "^11.6.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
     "@types/better-sqlite3": "^7.6.12",
-    "typescript": "^5.7.0",
-    "tsx": "^4.19.0",
-    "eslint": "^9.16.0",
+    "@types/node": "^22.10.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.16.0",
+    "husky": "^9.1.7",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
   "engines": {
