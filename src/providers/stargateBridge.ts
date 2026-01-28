@@ -8,24 +8,13 @@ import {
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
 import { getTokenAddress } from '../tokens.js';
-
-// Stargate V2 contracts - Native ETH pool
-const STARGATE_POOL_NATIVE: Record<number, Address> = {
-  [CHAIN_ID_ETHEREUM]: '0x77b2043768d28E9C9aB44E1aBfC95944bcE57931', // StargatePoolNative
-  [CHAIN_ID_HEMI]: '0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590', // StargatePoolNative on Hemi
-};
-
-// Stargate V2 contracts - USDC OFT (Omnichain Fungible Token)
-const STARGATE_OFT_USDC: Record<number, Address> = {
-  [CHAIN_ID_ETHEREUM]: '0xc026395860Db2d07ee33e05fE50ed7bD583189C7',
-  [CHAIN_ID_HEMI]: '0x45f1A95A4D3f3836523F5c83673c797f4d4d263B',
-};
-
-// LayerZero Endpoint IDs
-const LZ_ENDPOINT_IDS: Record<number, number> = {
-  [CHAIN_ID_ETHEREUM]: 30101,
-  [CHAIN_ID_HEMI]: 30329, // Hemi LayerZero endpoint ID
-};
+import {
+  STARGATE_POOL_NATIVE,
+  STARGATE_OFT_USDC,
+  LZ_ENDPOINT_IDS,
+} from '../constants/contracts.js';
+import { TX_RECEIPT_TIMEOUT_MS } from '../constants/timing.js';
+import { applyBridgeMinAmount, applyBridgeArrivalTolerance } from '../constants/slippage.js';
 
 // LayerZero OFTSent event - emitted on bridge send, contains the GUID for tracking
 const OFT_SENT_EVENT_ABI = [
@@ -173,7 +162,7 @@ function createStargateBridge(
       }
 
       const publicClient = getPublicClient(clients, fromChainId);
-      const minAmount = (amount * 99n) / 100n; // 1% slippage
+      const minAmount = applyBridgeMinAmount(amount);
 
       try {
         const result = await publicClient.readContract({
@@ -216,7 +205,7 @@ function createStargateBridge(
       const publicClient = getPublicClient(clients, fromChainId);
       const useOft = isOftToken(fromChainId, token);
 
-      const minAmount = (amount * 99n) / 100n;
+      const minAmount = applyBridgeMinAmount(amount);
 
       // For OFT tokens (USDC), ensure approval before send
       if (useOft) {
@@ -228,7 +217,7 @@ function createStargateBridge(
             amount: amount.toString(),
           });
           const approveTxHash = await approveToken(clients, fromChainId, token, routerAddress, amount);
-          await publicClient.waitForTransactionReceipt({ hash: approveTxHash, timeout: 120_000 });
+          await publicClient.waitForTransactionReceipt({ hash: approveTxHash, timeout: TX_RECEIPT_TIMEOUT_MS });
         }
       }
 
@@ -284,7 +273,7 @@ function createStargateBridge(
       });
 
       // Wait for receipt and extract LayerZero GUID from logs
-      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: TX_RECEIPT_TIMEOUT_MS });
       let lzGuid: `0x${string}` | undefined;
 
       for (const log of receipt.logs) {
@@ -345,7 +334,7 @@ function createStargateBridge(
 
       // For Stargate, delivery is typically automatic via LayerZero
       // Check if funds arrived on destination
-      const arrived = await this.detectArrival(clients, tx.token, tx.amount * 98n / 100n);
+      const arrived = await this.detectArrival(clients, tx.token, applyBridgeArrivalTolerance(tx.amount));
       return arrived ? 'completed' : 'sent';
     },
 

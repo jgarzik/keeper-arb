@@ -5,6 +5,8 @@ import { CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
+import { ZERO_X_API_BASE } from '../../constants/api.js';
+import { HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS } from '../../constants/timing.js';
 
 // Read API key from Docker secret (falls back to env var for local dev)
 function getApiKey(): string | undefined {
@@ -17,13 +19,6 @@ function getApiKey(): string | undefined {
     return process.env.ZERO_X_API_KEY;
   }
 }
-
-/**
- * 0x Swap API v2 provider - aggregates liquidity from Curve, Uniswap, Balancer, etc.
- * Docs: https://0x.org/docs/api
- * Note: Requires ZERO_X_API_KEY environment variable
- */
-const ZERO_X_API_BASE = 'https://api.0x.org/swap/allowance-holder';
 
 interface ZeroXQuoteResponse {
   sellAmount: string;
@@ -181,7 +176,7 @@ class ZeroXApiProvider implements ApiSwapProvider {
       if (res.ok) {
         return {
           provider: this.name,
-          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          status: latencyMs > HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
           latencyMs,
           details: { hasApiKey: true },
         };

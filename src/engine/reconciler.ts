@@ -22,8 +22,8 @@ import {
   checkFinalizationReady,
 } from './steps.js';
 import { recordCycleCompletion } from './accounting.js';
-
-const MAX_ACTIONS_PER_LOOP = 3;
+import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS } from '../constants/timing.js';
+import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 
 export interface ReconcilerState {
   running: boolean;
@@ -71,7 +71,6 @@ export function resumeToken(token: TokenId): void {
   diag.info('Token resumed', { token });
 }
 
-const VCRED_SLEEP_DURATION_MS = 60 * 60 * 1000; // 60 minutes
 
 export function enterVcredSleep(): void {
   state.vcredSleepUntil = new Date(Date.now() + VCRED_SLEEP_DURATION_MS);
@@ -309,7 +308,7 @@ async function checkBridgeArrival(
 
   // Check balance (with some tolerance for bridge fees)
   const balance = await getTokenBalance(clients, destChainId, tokenAddr);
-  return balance >= expectedAmount * 95n / 100n;
+  return balance >= applyBalanceCheckTolerance(expectedAmount);
 }
 
 // Find and create a new opportunity

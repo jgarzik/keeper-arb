@@ -14,6 +14,15 @@ import {
 } from './bridgeInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
+import {
+  HEMI_OPTIMISM_PORTAL,
+  HEMI_L2_OUTPUT_ORACLE,
+  HEMI_L2_STANDARD_BRIDGE,
+  L2_TO_L1_MESSAGE_PASSER,
+} from '../constants/contracts.js';
+import { DEFAULT_HEMI_RPC_URL } from '../constants/api.js';
+import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS } from '../constants/timing.js';
+import { applyBridgeArrivalTolerance } from '../constants/slippage.js';
 
 // Define Hemi as an OP-stack chain for viem's OP utilities
 const hemiOpStack = defineChain({
@@ -21,19 +30,14 @@ const hemiOpStack = defineChain({
   id: CHAIN_ID_HEMI,
   name: 'Hemi',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: ['https://rpc.hemi.network/rpc'] } },
+  rpcUrls: { default: { http: [DEFAULT_HEMI_RPC_URL] } },
   contracts: {
     ...chainConfig.contracts,
-    portal: { [CHAIN_ID_ETHEREUM]: { address: '0x39a0005415256B9863aFE2d55Edcf75ECc3A4D7e' as const } },
-    l2OutputOracle: { [CHAIN_ID_ETHEREUM]: { address: '0x6daF3a3497D8abdFE12915aDD9829f83A79C0d51' as const } },
+    portal: { [CHAIN_ID_ETHEREUM]: { address: HEMI_OPTIMISM_PORTAL } },
+    l2OutputOracle: { [CHAIN_ID_ETHEREUM]: { address: HEMI_L2_OUTPUT_ORACLE } },
   },
   sourceId: CHAIN_ID_ETHEREUM, // Ethereum mainnet
 });
-
-// Hemi OP-stack bridge contracts (from constants.rs)
-const _HEMI_L1_STANDARD_BRIDGE: Address = '0x5eaa10F99e7e6D177eF9F74E519E319aa49f191e';
-const HEMI_L2_STANDARD_BRIDGE: Address = '0x4200000000000000000000000000000000000010';
-const HEMI_OPTIMISM_PORTAL: Address = '0x39a0005415256B9863aFE2d55Edcf75ECc3A4D7e';
 
 // L2 Standard Bridge ABI (withdraw functions)
 const L2_STANDARD_BRIDGE_ABI = [
@@ -164,7 +168,6 @@ const MESSAGE_PASSED_EVENT = {
   ],
 } as const;
 
-const L2_TO_L1_MESSAGE_PASSER: Address = '0x4200000000000000000000000000000000000016';
 
 function createHemiTunnelBridge(
   fromChainId: number,
@@ -209,7 +212,7 @@ function createHemiTunnelBridge(
           amount: amount.toString(),
         });
         const approvalHash = await approveToken(clients, CHAIN_ID_HEMI, token, HEMI_L2_STANDARD_BRIDGE, amount);
-        await publicClient.waitForTransactionReceipt({ hash: approvalHash, timeout: 120_000 });
+        await publicClient.waitForTransactionReceipt({ hash: approvalHash, timeout: TX_RECEIPT_TIMEOUT_MS });
       }
 
       const nonce = await getNextNonce(clients, CHAIN_ID_HEMI);
@@ -257,7 +260,7 @@ function createHemiTunnelBridge(
       // Wait for receipt and extract withdrawalHash
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
-        timeout: 120_000,
+        timeout: TX_RECEIPT_TIMEOUT_MS,
       });
 
       let withdrawalHash: `0x${string}` | undefined;
@@ -341,11 +344,11 @@ function createHemiTunnelBridge(
               // Check if enough time has passed for finalization (1 day for Hemi)
               const timestamp = proven[1];
               const now = BigInt(Math.floor(Date.now() / 1000));
-              const finalizationPeriod = 86400n; // 1 day in seconds (Hemi challenge period)
+              const finalizationPeriod = HEMI_CHALLENGE_PERIOD_SECONDS;
 
               if (now >= timestamp + finalizationPeriod) {
                 // Check if finalized by checking destination balance
-                const arrived = await this.detectArrival(clients, tx.token, tx.amount * 98n / 100n);
+                const arrived = await this.detectArrival(clients, tx.token, applyBridgeArrivalTolerance(tx.amount));
                 return arrived ? 'completed' : 'finalize_required';
               }
               return 'proved';

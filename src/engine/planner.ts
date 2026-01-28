@@ -5,6 +5,7 @@ import { getBestPrice } from '../providers/priceAggregator.js';
 import { getUniswapRefPrice, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
 import { type Config } from '../config.js';
+import { DEFAULT_TEST_VCRED_AMOUNT } from '../constants/timing.js';
 
 export interface Opportunity {
   token: TokenId;
@@ -20,10 +21,10 @@ export async function detectOpportunities(
   config: Config,
   vcredTestAmount?: bigint
 ): Promise<Opportunity[]> {
-  // Default: 1000 VCRED using correct decimals
+  // Default: test amount using correct decimals
   if (!vcredTestAmount) {
     const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
-    vcredTestAmount = 1000n * (10n ** BigInt(vcredDecimals));
+    vcredTestAmount = DEFAULT_TEST_VCRED_AMOUNT * (10n ** BigInt(vcredDecimals));
   }
   const opportunities: Opportunity[] = [];
   const vcredAddress = requireTokenAddress('VCRED', CHAIN_ID_HEMI);

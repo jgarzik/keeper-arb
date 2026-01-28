@@ -1,4 +1,9 @@
 import { diag } from './logging.js';
+import {
+  RETRY_MAX_ATTEMPTS,
+  RETRY_BASE_DELAY_MS,
+  RETRY_MAX_DELAY_MS,
+} from './constants/timing.js';
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -35,9 +40,9 @@ export async function withRetry<T>(
   options: RetryOptions = {}
 ): Promise<T> {
   const {
-    maxRetries = 3,
-    baseDelayMs = 1000,
-    maxDelayMs = 30000,
+    maxRetries = RETRY_MAX_ATTEMPTS,
+    baseDelayMs = RETRY_BASE_DELAY_MS,
+    maxDelayMs = RETRY_MAX_DELAY_MS,
     shouldRetry = isTransientError,
   } = options;
 

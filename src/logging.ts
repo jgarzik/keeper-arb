@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { CHAIN_ID_ETHEREUM, CHAIN_ID_HEMI } from './chains.js';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -143,7 +144,7 @@ function formatLogEntry(entry: LogEntry | MoneyLogEntry, _source: 'diag' | 'mone
     // Extract special fields
     if (data.token && typeof data.token === 'string') formatted.token = data.token;
     if (data.chainId && typeof data.chainId === 'number') {
-      formatted.chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Ethereum' : `Chain ${data.chainId}`;
+      formatted.chain = data.chainId === CHAIN_ID_HEMI ? 'Hemi' : data.chainId === CHAIN_ID_ETHEREUM ? 'Ethereum' : `Chain ${data.chainId}`;
     }
     if (data.amount && typeof data.amount === 'string') formatted.amount = data.amount;
     if (data.txHash && typeof data.txHash === 'string') {
@@ -151,9 +152,9 @@ function formatLogEntry(entry: LogEntry | MoneyLogEntry, _source: 'diag' | 'mone
       // Generate explorer URL if we have chainId
       if (data.chainId && typeof data.chainId === 'number') {
         const chainId = data.chainId;
-        if (chainId === 43111) {
+        if (chainId === CHAIN_ID_HEMI) {
           formatted.explorerUrl = `https://explorer.hemi.xyz/tx/${data.txHash}`;
-        } else if (chainId === 1) {
+        } else if (chainId === CHAIN_ID_ETHEREUM) {
           formatted.explorerUrl = `https://etherscan.io/tx/${data.txHash}`;
         }
       }

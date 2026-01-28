@@ -5,6 +5,7 @@ import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { getBestPrice } from '../providers/priceAggregator.js';
 import { getUniswapRefPrice } from '../providers/uniswapRef.js';
 import { diag } from '../logging.js';
+import { MAX_QUOTE_CALLS, DEFAULT_TEST_VCRED_AMOUNT } from '../constants/timing.js';
 
 export interface SizingResult {
   token: TokenId;
@@ -12,8 +13,6 @@ export interface SizingResult {
   hemiAmountOut: bigint;
   ethRefAmountOut: bigint;
 }
-
-const MAX_QUOTE_CALLS = 15;
 
 // Check if a trade is profitable at a given size
 // Logic: If Hemi gives more X than Ethereum for equivalent input, it's profitable
@@ -87,8 +86,8 @@ export async function findOptimalSize(
     return isProfitableAtSize(clients, token, vcredIn);
   }
 
-  // Start with default test size (1000 VCRED)
-  let testSize = 1000n * granularity;
+  // Start with default test size
+  let testSize = DEFAULT_TEST_VCRED_AMOUNT * granularity;
   if (testSize > maxSize) testSize = maxSize;
   if (testSize < minSize) testSize = minSize;
 

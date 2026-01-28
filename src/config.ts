@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
+import { DEFAULT_HEMI_RPC_URL } from './constants/api.js';
 
 export const WALLET_ADDRESS = '0x84a2Da9AAD3cdbA6C5C1Bea15Ac2441DB5B254cc';
 
 // RPC endpoints - single source of truth
-export const HEMI_RPC_URL = process.env.HEMI_RPC_URL || 'https://rpc.hemi.network/rpc';
+export const HEMI_RPC_URL = process.env.HEMI_RPC_URL || DEFAULT_HEMI_RPC_URL;
 
 if (!process.env.ETH_RPC_URL) {
   throw new Error('ETH_RPC_URL environment variable is required');

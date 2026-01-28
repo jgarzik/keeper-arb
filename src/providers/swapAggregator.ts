@@ -3,6 +3,7 @@ import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenA
 import { type ApiSwapProvider, type ApiSwapQuote } from './swapInterface.js';
 import { sushiApiProvider, zeroXApiProvider, oneDeltaApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
+import { TX_RECEIPT_TIMEOUT_MS } from '../constants/timing.js';
 
 // All available API providers
 // NOTE: Eisen disabled - requires authentication (401 Unauthorized)
@@ -94,7 +95,7 @@ async function ensureApproval(
     diag.info('Approving token for swap', { chainId, token, spender, amount: amount.toString() });
     const hash = await approveToken(clients, chainId, token, spender, amount);
     const publicClient = getPublicClient(clients, chainId);
-    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    await publicClient.waitForTransactionReceipt({ hash, timeout: TX_RECEIPT_TIMEOUT_MS });
   }
 }
 

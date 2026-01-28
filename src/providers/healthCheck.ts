@@ -4,16 +4,16 @@ import { CHAIN_ID_ETHEREUM, CHAIN_ID_HEMI } from '../chains.js';
 import { sushiApiProvider } from './dex/sushiApi.js';
 import { zeroXApiProvider } from './dex/zeroXApi.js';
 import { oneDeltaApiProvider } from './dex/oneDeltaApi.js';
-
-// Stargate V2 contracts
-const STARGATE_POOL_NATIVE_ETH = '0x77b2043768d28E9C9aB44E1aBfC95944bcE57931';
-const STARGATE_POOL_NATIVE_HEMI = '0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590';
-
-// Uniswap V3 Quoter V2 on Ethereum
-const QUOTER_V2_ADDRESS = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e';
-
-// Hemi OptimismPortal
-const HEMI_OPTIMISM_PORTAL = '0x39a0005415256B9863aFE2d55Edcf75ECc3A4D7e';
+import {
+  STARGATE_POOL_NATIVE,
+  UNISWAP_QUOTER_V2,
+  HEMI_OPTIMISM_PORTAL,
+  LZ_ENDPOINT_IDS,
+} from '../constants/contracts.js';
+import {
+  HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS,
+  HEALTH_CHECK_CONTRACT_DEGRADED_THRESHOLD_MS,
+} from '../constants/timing.js';
 
 const STARGATE_QUOTE_SEND_ABI = [
   {
@@ -102,12 +102,12 @@ async function checkStargateHealth(clients: Clients): Promise<ProviderHealth> {
     // Call quoteSend with small amount to check contract is responsive
     // Stargate has minimum amounts, use 0.001 ETH
     await publicClient.readContract({
-      address: STARGATE_POOL_NATIVE_ETH as `0x${string}`,
+      address: STARGATE_POOL_NATIVE[CHAIN_ID_ETHEREUM],
       abi: STARGATE_QUOTE_SEND_ABI,
       functionName: 'quoteSend',
       args: [
         {
-          dstEid: 30329, // Hemi LZ endpoint
+          dstEid: LZ_ENDPOINT_IDS[CHAIN_ID_HEMI],
           to: addressToBytes32(clients.address),
           amountLD: 1000000000000000n, // 0.001 ETH
           minAmountLD: 0n,
@@ -122,11 +122,11 @@ async function checkStargateHealth(clients: Clients): Promise<ProviderHealth> {
     const latencyMs = Date.now() - start;
     return {
       provider: 'Stargate',
-      status: latencyMs > 3000 ? 'degraded' : 'ok',
+      status: latencyMs > HEALTH_CHECK_CONTRACT_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
       latencyMs,
       details: {
-        ethContract: STARGATE_POOL_NATIVE_ETH,
-        hemiContract: STARGATE_POOL_NATIVE_HEMI,
+        ethContract: STARGATE_POOL_NATIVE[CHAIN_ID_ETHEREUM],
+        hemiContract: STARGATE_POOL_NATIVE[CHAIN_ID_HEMI],
       },
     };
   } catch (err) {
@@ -147,7 +147,7 @@ async function checkHemiTunnelHealth(clients: Clients): Promise<ProviderHealth> 
     // Read provenWithdrawals with a dummy hash to check contract is responsive
     const dummyHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
     await publicClient.readContract({
-      address: HEMI_OPTIMISM_PORTAL as `0x${string}`,
+      address: HEMI_OPTIMISM_PORTAL,
       abi: OPTIMISM_PORTAL_ABI,
       functionName: 'provenWithdrawals',
       args: [dummyHash],
@@ -156,7 +156,7 @@ async function checkHemiTunnelHealth(clients: Clients): Promise<ProviderHealth> 
     const latencyMs = Date.now() - start;
     return {
       provider: 'HemiTunnel',
-      status: latencyMs > 3000 ? 'degraded' : 'ok',
+      status: latencyMs > HEALTH_CHECK_CONTRACT_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
       latencyMs,
       details: { portal: HEMI_OPTIMISM_PORTAL },
     };
@@ -177,7 +177,7 @@ async function checkUniswapRefHealth(clients: Clients): Promise<ProviderHealth> 
 
     // WETH -> USDC quote with 1 wei
     await publicClient.readContract({
-      address: QUOTER_V2_ADDRESS as `0x${string}`,
+      address: UNISWAP_QUOTER_V2,
       abi: QUOTER_ABI,
       functionName: 'quoteExactInputSingle',
       args: [
@@ -194,9 +194,9 @@ async function checkUniswapRefHealth(clients: Clients): Promise<ProviderHealth> 
     const latencyMs = Date.now() - start;
     return {
       provider: 'UniswapRef',
-      status: latencyMs > 3000 ? 'degraded' : 'ok',
+      status: latencyMs > HEALTH_CHECK_CONTRACT_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
       latencyMs,
-      details: { quoter: QUOTER_V2_ADDRESS },
+      details: { quoter: UNISWAP_QUOTER_V2 },
     };
   } catch (err) {
     return {
@@ -217,7 +217,7 @@ async function checkHemiRpc(clients: Clients): Promise<ProviderHealth> {
     const latencyMs = Date.now() - start;
     return {
       provider: 'Hemi RPC',
-      status: latencyMs > 2000 ? 'degraded' : 'ok',
+      status: latencyMs > HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
       latencyMs,
     };
   } catch (err) {
@@ -239,7 +239,7 @@ async function checkEthereumRpc(clients: Clients): Promise<ProviderHealth> {
     const latencyMs = Date.now() - start;
     return {
       provider: 'Ethereum RPC',
-      status: latencyMs > 2000 ? 'degraded' : 'ok',
+      status: latencyMs > HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
       latencyMs,
     };
   } catch (err) {

@@ -7,6 +7,9 @@ import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridg
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
 import { type Cycle, type Step, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
+import { HEMI_OPTIMISM_PORTAL } from '../constants/contracts.js';
+import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS } from '../constants/timing.js';
+import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 
 // Find existing non-failed step or create new one (idempotent step creation)
 function getOrCreateStep(cycleId: number, stepType: string, chainId: number): Step {
@@ -38,7 +41,7 @@ export async function executeHemiSwap(
 
   // Check if already done by looking at balance
   const tokenBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, tokenAddress);
-  if (cycle.xOut && tokenBalance >= BigInt(cycle.xOut) * 95n / 100n) {
+  if (cycle.xOut && tokenBalance >= applyBalanceCheckTolerance(BigInt(cycle.xOut))) {
     diag.info('Hemi swap already completed', { cycleId: cycle.id });
     return { success: true, newState: 'HEMI_SWAP_DONE' };
   }
@@ -60,7 +63,7 @@ export async function executeHemiSwap(
 
     // Wait for confirmation with timeout
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -130,7 +133,7 @@ export async function executeBridgeOut(
     // For Stargate, wait for source tx confirmation
     if (!isHemiTunnel) {
       const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
       if (receipt.status !== 'success') {
         updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -198,7 +201,7 @@ export async function executeEthSwap(
 
   // Check if already done
   const usdcBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, usdcEth);
-  if (cycle.usdcOut && usdcBalance >= BigInt(cycle.usdcOut) * 95n / 100n) {
+  if (cycle.usdcOut && usdcBalance >= applyBalanceCheckTolerance(BigInt(cycle.usdcOut))) {
     diag.info('Ethereum swap already completed', { cycleId: cycle.id });
     return { success: true, newState: 'ETH_SWAP_DONE' };
   }
@@ -219,7 +222,7 @@ export async function executeEthSwap(
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -274,7 +277,7 @@ export async function executeBridgeBack(
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTx.txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -336,7 +339,7 @@ export async function executeCloseSwap(
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -409,7 +412,7 @@ export async function executeProveWithdrawal(
 
     // Wait for confirmation
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -483,7 +486,7 @@ export async function executeFinalizeWithdrawal(
 
     // Wait for confirmation
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: TX_RECEIPT_TIMEOUT_MS });
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
@@ -531,7 +534,7 @@ export async function checkFinalizationReady(
   try {
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
     const proven = await publicClient.readContract({
-      address: '0x39a0005415256B9863aFE2d55Edcf75ECc3A4D7e' as const, // HEMI_OPTIMISM_PORTAL
+      address: HEMI_OPTIMISM_PORTAL,
       abi: [
         {
           name: 'provenWithdrawals',
@@ -555,7 +558,7 @@ export async function checkFinalizationReady(
     }
 
     const now = BigInt(Math.floor(Date.now() / 1000));
-    const challengePeriod = 86400n; // 1 day for Hemi
+    const challengePeriod = HEMI_CHALLENGE_PERIOD_SECONDS;
 
     return now >= timestamp + challengePeriod;
   } catch (err) {

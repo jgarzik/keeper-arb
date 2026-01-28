@@ -3,9 +3,7 @@ import { type Clients, getPublicClient } from '../wallet.js';
 import { CHAIN_ID_ETHEREUM } from '../chains.js';
 import { diag } from '../logging.js';
 import { withRetry } from '../retry.js';
-
-// Uniswap V3 Quoter V2 on Ethereum
-const QUOTER_V2_ADDRESS: Address = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e';
+import { UNISWAP_QUOTER_V2 } from '../constants/contracts.js';
 
 const QUOTER_ABI = [
   {
@@ -59,7 +57,7 @@ async function getUniswapV3Price(
     try {
       const result = await withRetry(() =>
         publicClient.readContract({
-          address: QUOTER_V2_ADDRESS,
+          address: UNISWAP_QUOTER_V2,
           abi: QUOTER_ABI,
           functionName: 'quoteExactInputSingle',
           args: [

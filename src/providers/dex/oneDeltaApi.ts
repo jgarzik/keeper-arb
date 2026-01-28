@@ -4,13 +4,8 @@ import { CHAIN_ID_HEMI } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
-
-/**
- * 1delta API provider for Hemi swaps
- * Uses 0x aggregator backend
- * Docs: https://app.1delta.io
- */
-const ONE_DELTA_API_BASE = 'https://api.1delta.io';
+import { ONE_DELTA_API_BASE } from '../../constants/api.js';
+import { HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS } from '../../constants/timing.js';
 
 interface OneDeltaQuoteResponse {
   // Response structure from 0x backend
@@ -162,7 +157,7 @@ class OneDeltaApiProvider implements ApiSwapProvider, ApiPriceProvider {
       if (res.ok || res.status === 404) {
         return {
           provider: this.name,
-          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          status: latencyMs > HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
           latencyMs,
         };
       }

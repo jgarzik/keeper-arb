@@ -4,8 +4,8 @@ import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
-
-const SUSHI_API_BASE = 'https://api.sushi.com/swap/v7';
+import { SUSHI_API_BASE } from '../../constants/api.js';
+import { HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS } from '../../constants/timing.js';
 
 interface SushiApiResponse {
   status: 'Success' | 'Partial' | 'NoWay';
@@ -151,7 +151,7 @@ class SushiApiProvider implements ApiSwapProvider, ApiPriceProvider {
       if (res.status === 200 || res.status === 400 || res.status === 422) {
         return {
           provider: this.name,
-          status: latencyMs > 2000 ? 'degraded' : 'ok',
+          status: latencyMs > HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok',
           latencyMs,
         };
       }
