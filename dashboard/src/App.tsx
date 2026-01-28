@@ -499,38 +499,61 @@ function App() {
 
     // "Best swap quote selected" - show the winning quote
     if (log.msg === 'Best swap quote selected') {
-      const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
-      const symbolIn = getSymbol(data.tokenIn);
-      const symbolOut = getSymbol(data.tokenOut);
-      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
-      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
-      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain})`;
+      const symbolIn = getSymbol(String(data.tokenIn));
+      const symbolOut = getSymbol(String(data.tokenOut));
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
+      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(String(data.tokenOut)));
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}`;
     }
 
     // "Sushi API quote" / "Eisen API quote" / "1delta API quote" - show individual quote
     if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote' || log.msg === '1delta API quote') {
-      const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
-      const symbolIn = getSymbol(data.tokenIn);
-      const symbolOut = getSymbol(data.tokenOut);
-      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(data.tokenIn));
-      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
+      const symbolIn = getSymbol(String(data.tokenIn));
+      const symbolOut = getSymbol(String(data.tokenOut));
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
+      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(String(data.tokenOut)));
       const impact = data.priceImpact ? ` ${(Number(data.priceImpact) * 100).toFixed(1)}%` : '';
-      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain}${impact})`;
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}${impact}`;
     }
 
     // "Sushi API no route" / "1delta API no route" - show no-route message
     if (log.msg === 'Sushi API no route' || log.msg === '1delta API no route') {
-      const symbolIn = getSymbol(data.tokenIn);
-      const symbolOut = getSymbol(data.tokenOut);
+      const symbolIn = getSymbol(String(data.tokenIn));
+      const symbolOut = getSymbol(String(data.tokenOut));
       return `no route ${symbolIn} → ${symbolOut}`;
     }
 
     // "Optimal size found" - show optimal trade sizing result
     if (log.msg === 'Optimal size found') {
+      const token = data.token || '?';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
-      const profit = formatBigIntString(String(data.profit), getDecimals('VCRED'));
-      const token = data.token || '';
-      return `${token}: ${vcredIn} VCRED → profit ${profit} VCRED`;
+      const hemiOut = formatBigIntString(String(data.hemiOut), getDecimals(token));
+      return `${vcredIn} VCRED → ${hemiOut} ${token}`;
+    }
+
+    // "New opportunity found" - show the opportunity
+    if (log.msg === 'New opportunity found') {
+      const token = data.token || '?';
+      const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
+      return `${vcredIn} VCRED → ${token}`;
+    }
+
+    // "Uniswap ref price" - show reference price quote
+    if (log.msg === 'Uniswap ref price') {
+      const symbolIn = getSymbol(String(data.tokenIn));
+      const symbolOut = getSymbol(String(data.tokenOut));
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
+      const amountOut = formatBigIntString(String(data.amountOut), getDecimals(String(data.tokenOut)));
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}`;
+    }
+
+    // "Swap tx submitted" - show swap details
+    if (log.msg === 'Swap tx submitted') {
+      const symbolIn = getSymbol(String(data.tokenIn));
+      const symbolOut = getSymbol(String(data.tokenOut));
+      const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
+      const expectedOut = formatBigIntString(String(data.expectedOut), getDecimals(String(data.tokenOut)));
+      return `${amountIn} ${symbolIn} → ${expectedOut} ${symbolOut}`;
     }
 
     // Step events - human-readable summaries
