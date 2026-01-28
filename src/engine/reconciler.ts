@@ -192,8 +192,9 @@ async function processStateMachine(
       const result = await executeProveWithdrawal(clients, config, cycle);
       if (result.success && result.newState) {
         updateCycleState(cycle.id, result.newState);
-      } else if (!result.success) {
-        // Log but don't fail cycle - will retry on next loop
+      } else if (!result.success && result.error) {
+        // Log actual errors but don't fail cycle - will retry on next loop
+        // (no error means expected "not ready yet" - already logged at debug)
         diag.warn('Prove withdrawal failed, will retry', {
           cycleId: cycle.id,
           token,
