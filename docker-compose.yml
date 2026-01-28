@@ -25,6 +25,7 @@ services:
       - DASHBOARD_PASSWORD
       - ZERO_X_API_KEY
     environment:
+      - ETH_RPC_URL=${ETH_RPC_URL:-}
       - WEBHOOK_URL=${WEBHOOK_URL:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7120/health"]
