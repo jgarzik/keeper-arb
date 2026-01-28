@@ -213,10 +213,10 @@ export async function startServer(config: Config, clients: Clients): Promise<voi
       'Connection': 'keep-alive',
     });
 
-    // Send initial buffer (newest first)
+    // Send oldest-first so client prepending results in newest-first
     const buffer = logType === 'diag' ? getDiagBuffer() : getMoneyBuffer();
-    for (const entry of buffer) {
-      reply.raw.write(`data: ${JSON.stringify(entry)}\n\n`);
+    for (let i = buffer.length - 1; i >= 0; i--) {
+      reply.raw.write(`data: ${JSON.stringify(buffer[i])}\n\n`);
     }
 
     // Subscribe to new logs
