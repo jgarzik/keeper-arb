@@ -1,8 +1,10 @@
 /**
- * Single source of truth for RPC URLs.
- * Environment variables override these defaults.
+ * RPC URL exports for backward compatibility.
+ * Single source of truth is in config.ts.
  */
+import { HEMI_RPC_URL, ETH_RPC_URL } from './config.js';
+
 export const RPC_URLS = {
-  hemi: 'https://rpc.hemi.network/rpc',
-  ethereum: 'https://eth.llamarpc.com',
+  hemi: HEMI_RPC_URL,
+  ethereum: ETH_RPC_URL,
 } as const;

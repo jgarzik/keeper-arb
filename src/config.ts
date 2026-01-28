@@ -1,8 +1,11 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
-import { RPC_URLS } from './rpc.js';
 
 export const WALLET_ADDRESS = '0x84a2Da9AAD3cdbA6C5C1Bea15Ac2441DB5B254cc';
+
+// RPC endpoints - single source of truth (ETH_RPC_URL must be set in .env)
+export const HEMI_RPC_URL = process.env.HEMI_RPC_URL || 'https://rpc.hemi.network/rpc';
+export const ETH_RPC_URL = process.env.ETH_RPC_URL || 'https://eth.llamarpc.com';
 
 export interface Config {
   // RPC endpoints
@@ -54,8 +57,8 @@ function readSecret(name: string): string {
 
 export function loadConfig(): Config {
   return {
-    hemiRpcUrl: process.env.HEMI_RPC_URL || RPC_URLS.hemi,
-    ethRpcUrl: process.env.ETH_RPC_URL || RPC_URLS.ethereum,
+    hemiRpcUrl: HEMI_RPC_URL,
+    ethRpcUrl: ETH_RPC_URL,
 
     walletPrivateKey: readSecret('ARBITRAGE_PRIVATE_KEY'),
 
