@@ -144,9 +144,11 @@ export async function executeBridgeOut(
         lzGuid: bridgeTx.lzGuid,
       });
     } else {
-      // Hemi tunnel already confirmed in send(), store withdrawalHash and withdrawalData
+      // Hemi tunnel already confirmed in send(), store withdrawalHash, withdrawalData, and gas
       updateStep(step.id, {
         status: 'confirmed',
+        gasUsed: bridgeTx.gasUsed,
+        gasPrice: bridgeTx.gasPrice,
         withdrawalHash: bridgeTx.withdrawalHash,
         withdrawalData: bridgeTx.withdrawalData,
       });

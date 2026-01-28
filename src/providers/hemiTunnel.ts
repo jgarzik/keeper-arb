@@ -296,6 +296,8 @@ function createHemiTunnelBridge(
         amount,
         txHash: hash,
         status: receipt.status === 'success' ? 'sent' : 'failed',
+        gasUsed: receipt.gasUsed,
+        gasPrice: receipt.effectiveGasPrice,
         withdrawalHash,
         withdrawalData,
       };

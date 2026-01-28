@@ -20,6 +20,9 @@ export interface BridgeTransaction {
   amount: bigint;
   txHash: `0x${string}`;
   status: BridgeStatus;
+  // Gas data from receipt
+  gasUsed?: bigint;
+  gasPrice?: bigint;
   // For LayerZero/Stargate bridges
   lzGuid?: `0x${string}`; // LayerZero message GUID for tracking on layerzeroscan.com
   // For Hemi tunnel
