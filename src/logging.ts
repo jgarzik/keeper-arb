@@ -25,6 +25,8 @@ export interface FormattedLogEntry {
   amount?: string;
   txHash?: string;
   explorerUrl?: string;
+  lzGuid?: string;
+  lzScanUrl?: string;
   data?: Record<string, unknown>;
 }
 
@@ -157,10 +159,16 @@ function formatLogEntry(entry: LogEntry | MoneyLogEntry, _source: 'diag' | 'mone
       }
     }
 
+    // Extract LayerZero GUID and generate scan URL
+    if (data.lzGuid && typeof data.lzGuid === 'string') {
+      formatted.lzGuid = data.lzGuid;
+      formatted.lzScanUrl = `https://layerzeroscan.com/tx/${data.lzGuid}`;
+    }
+
     // Keep remaining data but truncate large values
     const remainingData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (!['token', 'chainId', 'amount', 'txHash'].includes(key)) {
+      if (!['token', 'chainId', 'amount', 'txHash', 'lzGuid'].includes(key)) {
         if (typeof value === 'string' && value.length > 100) {
           remainingData[key] = value.slice(0, 100) + '...';
         } else if (typeof value === 'object' && value !== null) {

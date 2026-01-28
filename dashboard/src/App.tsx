@@ -74,6 +74,8 @@ interface LogEntry {
   amount?: string;
   txHash?: string;
   explorerUrl?: string;
+  lzGuid?: string;
+  lzScanUrl?: string;
   data?: Record<string, unknown>;
 }
 
@@ -524,6 +526,59 @@ function App() {
       return `${token}: ${vcredIn} VCRED → profit ${profit} VCRED`;
     }
 
+    // Step events - human-readable summaries
+    if (log.msg === 'HEMI_SWAP') {
+      const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
+      const xOut = formatBigIntString(String(data.xOut), getDecimals(data.token));
+      const token = data.token || 'X';
+      return `swap ${vcredIn} VCRED → ${xOut} ${token}`;
+    }
+
+    if (log.msg === 'ETH_SWAP') {
+      const tokenIn = formatBigIntString(String(data.tokenIn || data.xIn), getDecimals(data.token));
+      const usdcOut = formatBigIntString(String(data.usdcOut), getDecimals('USDC'));
+      const token = data.token || 'X';
+      return `swap ${tokenIn} ${token} → ${usdcOut} USDC`;
+    }
+
+    if (log.msg === 'BRIDGE_OUT') {
+      const amount = formatBigIntString(String(data.amount || data.xOut), getDecimals(data.token));
+      const token = data.token || 'X';
+      return `bridge ${amount} ${token} Hemi → Ethereum`;
+    }
+
+    if (log.msg === 'BRIDGE_BACK') {
+      const amount = formatBigIntString(String(data.amount || data.usdcAmount), getDecimals('USDC'));
+      return `bridge ${amount} USDC Ethereum → Hemi`;
+    }
+
+    if (log.msg === 'CLOSE_SWAP') {
+      const usdcIn = formatBigIntString(String(data.usdcIn), getDecimals('USDC'));
+      const vcredOut = formatBigIntString(String(data.vcredOut), getDecimals('VCRED'));
+      return `swap ${usdcIn} USDC → ${vcredOut} VCRED`;
+    }
+
+    if (log.msg === 'BRIDGE_PROVE') {
+      const token = data.token || 'X';
+      return `prove ${token} withdrawal`;
+    }
+
+    if (log.msg === 'BRIDGE_FINALIZE') {
+      const token = data.token || 'X';
+      return `finalize ${token} withdrawal`;
+    }
+
+    if (log.msg === 'CYCLE_CREATED') {
+      const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
+      const token = data.token || 'X';
+      return `new cycle: ${vcredIn} VCRED → ${token}`;
+    }
+
+    if (log.msg === 'CYCLE_COMPLETE') {
+      const netProfit = formatBigIntString(String(data.netProfit || data.netProfitVcred), getDecimals('VCRED'));
+      return `done: ${netProfit} VCRED net`;
+    }
+
     return null;
   };
 
@@ -900,6 +955,17 @@ function App() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           {log.txHash.slice(0, 10)}…
+                        </a>
+                      )}
+                      {log.lzScanUrl && log.lzGuid && (
+                        <a
+                          href={log.lzScanUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="log-link"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          LZ:{log.lzGuid.slice(0, 10)}…
                         </a>
                       )}
                     </div>
