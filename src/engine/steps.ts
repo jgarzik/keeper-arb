@@ -51,7 +51,10 @@ export async function executeHemiSwap(
     }
 
     // Execute swap (includes approval + simulation)
-    const step = createStep(cycle.id, 'HEMI_SWAP', CHAIN_ID_HEMI);
+    const step = getOrCreateStep(cycle.id, 'HEMI_SWAP', CHAIN_ID_HEMI);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'HEMI_SWAP_DONE' };
+    }
     const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
@@ -109,7 +112,11 @@ export async function executeBridgeOut(
     const isHemiTunnel = tokenMeta.bridgeRouteOut === 'HEMI_TUNNEL';
     const bridge = isHemiTunnel ? hemiTunnelHemiToEth : stargateHemiToEth;
 
-    const step = createStep(cycle.id, 'BRIDGE_OUT', CHAIN_ID_HEMI);
+    const step = getOrCreateStep(cycle.id, 'BRIDGE_OUT', CHAIN_ID_HEMI);
+    if (step.status === 'confirmed') {
+      const nextState: CycleState = isHemiTunnel ? 'BRIDGE_OUT_PROVE_REQUIRED' : 'BRIDGE_OUT_SENT';
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: nextState };
+    }
     const bridgeTx = await bridge.send(clients, tokenAddress, amount, clients.address);
 
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
@@ -200,7 +207,10 @@ export async function executeEthSwap(
     }
 
     // Execute swap (includes approval + simulation)
-    const step = createStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
+    const step = getOrCreateStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'ETH_SWAP_DONE' };
+    }
     const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
@@ -251,7 +261,10 @@ export async function executeBridgeBack(
   }
 
   try {
-    const step = createStep(cycle.id, 'BRIDGE_BACK', CHAIN_ID_ETHEREUM);
+    const step = getOrCreateStep(cycle.id, 'BRIDGE_BACK', CHAIN_ID_ETHEREUM);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'USDC_BRIDGE_BACK_SENT' };
+    }
     const bridgeTx = await stargateEthToHemi.send(clients, usdcEth, usdcBalance, clients.address);
 
     updateStep(step.id, { txHash: bridgeTx.txHash, status: 'submitted' });
@@ -309,7 +322,10 @@ export async function executeCloseSwap(
     }
 
     // Execute swap (includes approval + simulation)
-    const step = createStep(cycle.id, 'CLOSE_SWAP', CHAIN_ID_HEMI);
+    const step = getOrCreateStep(cycle.id, 'CLOSE_SWAP', CHAIN_ID_HEMI);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'HEMI_CLOSE_SWAP_DONE' };
+    }
     const txHash = await executeSwap(clients, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
