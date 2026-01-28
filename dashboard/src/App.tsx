@@ -527,28 +527,28 @@ function App() {
     }
 
     // Step events - human-readable summaries
+    // Note: token, amount, chainId, txHash are extracted to log.* fields by backend
+    const token = log.token || 'X';
+
     if (log.msg === 'HEMI_SWAP') {
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
-      const xOut = formatBigIntString(String(data.xOut), getDecimals(data.token));
-      const token = data.token || 'X';
+      const xOut = formatBigIntString(String(data.xOut), getDecimals(token));
       return `swap ${vcredIn} VCRED → ${xOut} ${token}`;
     }
 
     if (log.msg === 'ETH_SWAP') {
-      const tokenIn = formatBigIntString(String(data.tokenIn || data.xIn), getDecimals(data.token));
+      const tokenIn = formatBigIntString(String(data.tokenIn), getDecimals(token));
       const usdcOut = formatBigIntString(String(data.usdcOut), getDecimals('USDC'));
-      const token = data.token || 'X';
       return `swap ${tokenIn} ${token} → ${usdcOut} USDC`;
     }
 
     if (log.msg === 'BRIDGE_OUT') {
-      const amount = formatBigIntString(String(data.amount || data.xOut), getDecimals(data.token));
-      const token = data.token || 'X';
+      const amount = formatBigIntString(log.amount || '0', getDecimals(token));
       return `bridge ${amount} ${token} Hemi → Ethereum`;
     }
 
     if (log.msg === 'BRIDGE_BACK') {
-      const amount = formatBigIntString(String(data.amount || data.usdcAmount), getDecimals('USDC'));
+      const amount = formatBigIntString(log.amount || '0', getDecimals('USDC'));
       return `bridge ${amount} USDC Ethereum → Hemi`;
     }
 
@@ -559,23 +559,20 @@ function App() {
     }
 
     if (log.msg === 'BRIDGE_PROVE') {
-      const token = data.token || 'X';
       return `prove ${token} withdrawal`;
     }
 
     if (log.msg === 'BRIDGE_FINALIZE') {
-      const token = data.token || 'X';
       return `finalize ${token} withdrawal`;
     }
 
     if (log.msg === 'CYCLE_CREATED') {
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
-      const token = data.token || 'X';
       return `new cycle: ${vcredIn} VCRED → ${token}`;
     }
 
     if (log.msg === 'CYCLE_COMPLETE') {
-      const netProfit = formatBigIntString(String(data.netProfit || data.netProfitVcred), getDecimals('VCRED'));
+      const netProfit = formatBigIntString(String(data.netProfit), getDecimals('VCRED'));
       return `done: ${netProfit} VCRED net`;
     }
 
