@@ -23,8 +23,8 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install curl for health checks and create non-root user
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Install curl for health checks, sqlite3 for DB access, and create non-root user
+RUN apt-get update && apt-get install -y --no-install-recommends curl sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r keeper && useradd -r -g keeper keeper
 
