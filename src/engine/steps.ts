@@ -5,8 +5,18 @@ import { requireTokenAddress, getToken, validateTokenId } from '../tokens.js';
 import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
-import { type Cycle, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
+import { type Cycle, type Step, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
+
+// Find existing non-failed step or create new one (idempotent step creation)
+function getOrCreateStep(cycleId: number, stepType: string, chainId: number): Step {
+  const steps = getStepsForCycle(cycleId);
+  const existing = steps.find(s => s.stepType === stepType && s.status !== 'failed');
+  if (existing) {
+    return existing;
+  }
+  return createStep(cycleId, stepType, chainId);
+}
 
 export interface StepResult {
   success: boolean;
@@ -354,7 +364,10 @@ export async function executeProveWithdrawal(
   }
 
   try {
-    const step = createStep(cycle.id, 'BRIDGE_PROVE', CHAIN_ID_ETHEREUM);
+    const step = getOrCreateStep(cycle.id, 'BRIDGE_PROVE', CHAIN_ID_ETHEREUM);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'BRIDGE_OUT_PROVED' };
+    }
 
     // Build BridgeTransaction from cycle data
     const bridgeTx = {
@@ -419,7 +432,10 @@ export async function executeFinalizeWithdrawal(
   }
 
   try {
-    const step = createStep(cycle.id, 'BRIDGE_FINALIZE', CHAIN_ID_ETHEREUM);
+    const step = getOrCreateStep(cycle.id, 'BRIDGE_FINALIZE', CHAIN_ID_ETHEREUM);
+    if (step.status === 'confirmed') {
+      return { success: true, txHash: step.txHash as `0x${string}`, newState: 'ON_ETHEREUM' };
+    }
 
     // Build BridgeTransaction from cycle data
     const bridgeTx = {
