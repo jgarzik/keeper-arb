@@ -141,6 +141,7 @@ export async function executeBridgeOut(
         status: 'confirmed',
         gasUsed: receipt.gasUsed,
         gasPrice: receipt.effectiveGasPrice,
+        lzGuid: bridgeTx.lzGuid,
       });
     } else {
       // Hemi tunnel already confirmed in send(), store withdrawalHash and withdrawalData
@@ -157,6 +158,7 @@ export async function executeBridgeOut(
       amount: amount.toString(),
       provider: bridge.name,
       txHash: bridgeTx.txHash,
+      lzGuid: bridgeTx.lzGuid,
       chainId: CHAIN_ID_HEMI,
     });
 
@@ -281,6 +283,7 @@ export async function executeBridgeBack(
       status: 'confirmed',
       gasUsed: receipt.gasUsed,
       gasPrice: receipt.effectiveGasPrice,
+      lzGuid: bridgeTx.lzGuid,
     });
 
     logMoney('BRIDGE_BACK', {
@@ -288,6 +291,7 @@ export async function executeBridgeBack(
       token: 'USDC',
       amount: usdcBalance.toString(),
       txHash: bridgeTx.txHash,
+      lzGuid: bridgeTx.lzGuid,
       chainId: CHAIN_ID_ETHEREUM,
     });
 

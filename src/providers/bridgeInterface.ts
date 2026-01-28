@@ -20,6 +20,8 @@ export interface BridgeTransaction {
   amount: bigint;
   txHash: `0x${string}`;
   status: BridgeStatus;
+  // For LayerZero/Stargate bridges
+  lzGuid?: `0x${string}`; // LayerZero message GUID for tracking on layerzeroscan.com
   // For Hemi tunnel
   withdrawalHash?: `0x${string}`;
   withdrawalData?: string; // JSON: {nonce, sender, target, value, gasLimit, data}

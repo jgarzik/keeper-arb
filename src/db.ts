@@ -46,6 +46,7 @@ export interface Step {
   error: string | null;
   withdrawalHash: string | null;
   withdrawalData: string | null; // JSON: {nonce, sender, target, value, gasLimit, data}
+  lzGuid: string | null; // LayerZero message GUID for Stargate bridges
   createdAt: string;
   updatedAt: string;
 }
@@ -89,6 +90,14 @@ export function initDb(dataDir: string): Database.Database {
   ).get() as { cnt: number };
   if (hasWithdrawalData.cnt === 0) {
     db.exec('ALTER TABLE steps ADD COLUMN withdrawalData TEXT');
+  }
+
+  // Migration: add lzGuid column to steps if missing (LayerZero GUID for Stargate bridges)
+  const hasLzGuid = db.prepare(
+    "SELECT COUNT(*) as cnt FROM pragma_table_info('steps') WHERE name='lzGuid'"
+  ).get() as { cnt: number };
+  if (hasLzGuid.cnt === 0) {
+    db.exec('ALTER TABLE steps ADD COLUMN lzGuid TEXT');
   }
 
   diag.info('Database initialized', { path: dbPath });
@@ -309,7 +318,7 @@ export function getStep(id: number): Step | undefined {
 
 export function updateStep(
   id: number,
-  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string; withdrawalHash?: string; withdrawalData?: string }
+  updates: { txHash?: string; status?: StepStatus; gasUsed?: bigint; gasPrice?: bigint; error?: string; withdrawalHash?: string; withdrawalData?: string; lzGuid?: string }
 ): void {
   const d = getDb();
   const now = new Date().toISOString();
@@ -343,6 +352,10 @@ export function updateStep(
   if (updates.withdrawalData !== undefined) {
     sets.push('withdrawalData = ?');
     values.push(updates.withdrawalData);
+  }
+  if (updates.lzGuid !== undefined) {
+    sets.push('lzGuid = ?');
+    values.push(updates.lzGuid);
   }
 
   values.push(id.toString());

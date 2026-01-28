@@ -1,4 +1,4 @@
-import { type Address, encodeFunctionData } from 'viem';
+import { type Address, encodeFunctionData, decodeEventLog } from 'viem';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenBalance, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import {
   type BridgeProvider,
@@ -26,6 +26,21 @@ const LZ_ENDPOINT_IDS: Record<number, number> = {
   [CHAIN_ID_ETHEREUM]: 30101,
   [CHAIN_ID_HEMI]: 30329, // Hemi LayerZero endpoint ID
 };
+
+// LayerZero OFTSent event - emitted on bridge send, contains the GUID for tracking
+const OFT_SENT_EVENT_ABI = [
+  {
+    name: 'OFTSent',
+    type: 'event',
+    inputs: [
+      { name: 'guid', type: 'bytes32', indexed: true },
+      { name: 'dstEid', type: 'uint32', indexed: false },
+      { name: 'fromAddress', type: 'address', indexed: true },
+      { name: 'amountSentLD', type: 'uint256', indexed: false },
+      { name: 'amountReceivedLD', type: 'uint256', indexed: false },
+    ],
+  },
+] as const;
 
 const STARGATE_ABI = [
   {
@@ -212,7 +227,8 @@ function createStargateBridge(
             router: routerAddress,
             amount: amount.toString(),
           });
-          await approveToken(clients, fromChainId, token, routerAddress, amount);
+          const approveTxHash = await approveToken(clients, fromChainId, token, routerAddress, amount);
+          await publicClient.waitForTransactionReceipt({ hash: approveTxHash, timeout: 120_000 });
         }
       }
 
@@ -267,7 +283,27 @@ function createStargateBridge(
         nonce: safeNonceToNumber(nonce),
       });
 
-      diag.info('Stargate bridge tx submitted', {
+      // Wait for receipt and extract LayerZero GUID from logs
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+      let lzGuid: `0x${string}` | undefined;
+
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: OFT_SENT_EVENT_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (decoded.eventName === 'OFTSent') {
+            lzGuid = decoded.args.guid;
+            break;
+          }
+        } catch {
+          // Not the event we're looking for
+        }
+      }
+
+      diag.info('Stargate bridge tx confirmed', {
         fromChainId,
         toChainId,
         token,
@@ -275,6 +311,7 @@ function createStargateBridge(
         amount: amount.toString(),
         fee: feeResult.nativeFee.toString(),
         txHash: hash,
+        lzGuid,
       });
 
       return {
@@ -284,6 +321,7 @@ function createStargateBridge(
         token,
         amount,
         txHash: hash,
+        lzGuid,
         status: 'sent',
       };
     },
