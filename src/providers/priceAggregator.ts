@@ -1,10 +1,11 @@
 import { type Address } from 'viem';
 import { type ApiPriceProvider, type ApiPriceQuote } from './swapInterface.js';
-import { oneDeltaApiProvider } from './dex/index.js';
+import { oneDeltaApiProvider, sushiApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
 
 const PRICE_PROVIDERS: ApiPriceProvider[] = [
   oneDeltaApiProvider,
+  sushiApiProvider,
 ];
 
 export async function getBestPrice(

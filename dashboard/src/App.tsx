@@ -507,8 +507,8 @@ function App() {
       return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain})`;
     }
 
-    // "Sushi API quote" / "Eisen API quote" - show individual quote
-    if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote') {
+    // "Sushi API quote" / "Eisen API quote" / "1delta API quote" - show individual quote
+    if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote' || log.msg === '1delta API quote') {
       const chain = data.chainId === 43111 ? 'Hemi' : data.chainId === 1 ? 'Eth' : '';
       const symbolIn = getSymbol(data.tokenIn);
       const symbolOut = getSymbol(data.tokenOut);
@@ -516,6 +516,13 @@ function App() {
       const amountOut = formatBigIntString(String(data.amountOut), getDecimals(data.tokenOut));
       const impact = data.priceImpact ? ` ${(Number(data.priceImpact) * 100).toFixed(1)}%` : '';
       return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut} (${chain}${impact})`;
+    }
+
+    // "Sushi API no route" / "1delta API no route" - show no-route message
+    if (log.msg === 'Sushi API no route' || log.msg === '1delta API no route') {
+      const symbolIn = getSymbol(data.tokenIn);
+      const symbolOut = getSymbol(data.tokenOut);
+      return `no route ${symbolIn} → ${symbolOut}`;
     }
 
     // "Optimal size found" - show optimal trade sizing result

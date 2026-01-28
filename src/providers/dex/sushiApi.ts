@@ -1,5 +1,5 @@
 import { type Address } from 'viem';
-import { type ApiSwapProvider, type ApiSwapQuote, type ProviderHealth } from '../swapInterface.js';
+import { type ApiSwapProvider, type ApiSwapQuote, type ApiPriceProvider, type ApiPriceQuote, type ProviderHealth } from '../swapInterface.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
@@ -22,7 +22,7 @@ interface SushiApiResponse {
   error?: string;
 }
 
-class SushiApiProvider implements ApiSwapProvider {
+class SushiApiProvider implements ApiSwapProvider, ApiPriceProvider {
   readonly name = 'sushi-api';
   readonly supportedChains = [CHAIN_ID_ETHEREUM, CHAIN_ID_HEMI];
 
@@ -111,6 +111,32 @@ class SushiApiProvider implements ApiSwapProvider {
       });
       return null;
     }
+  }
+
+  async getPrice(
+    chainId: number,
+    tokenIn: Address,
+    tokenOut: Address,
+    amountIn: bigint
+  ): Promise<ApiPriceQuote | null> {
+    // Use getQuote internally but only return price info
+    const quote = await this.getQuote(
+      chainId,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      '0x0000000000000000000000000000000000000000',
+      0.01
+    );
+    if (!quote) return null;
+    return {
+      provider: this.name,
+      chainId,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      amountOut: quote.amountOut,
+    };
   }
 
   async checkHealth(): Promise<ProviderHealth> {
