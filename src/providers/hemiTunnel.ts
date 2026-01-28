@@ -371,11 +371,33 @@ function createHemiTunnelBridge(
       // Get the original L2 transaction receipt
       const receipt = await l2Client.getTransactionReceipt({ hash: tx.txHash });
 
-      diag.info('Waiting for L2 output to be posted (may take time if not ready)', {
-        txHash: tx.txHash,
-      });
+      // Check if L2 output is ready (non-blocking) before blocking on waitToProve
+      try {
+        const timeToProve = await l1Client.getTimeToProve({
+          receipt,
+          targetChain: hemiOpStack,
+        });
+        if (timeToProve.seconds > 0n) {
+          diag.debug('L2 output not ready yet', {
+            txHash: tx.txHash,
+            secondsRemaining: timeToProve.seconds.toString(),
+          });
+          throw new Error(`L2_OUTPUT_NOT_READY:${timeToProve.seconds}`);
+        }
+      } catch (err) {
+        // Re-throw our specific error
+        if (String(err).includes('L2_OUTPUT_NOT_READY')) throw err;
+        // L2 output not published yet - throw with unknown time
+        diag.debug('L2 output not published yet', {
+          txHash: tx.txHash,
+          error: String(err),
+        });
+        throw new Error('L2_OUTPUT_NOT_READY:unknown');
+      }
 
-      // Wait for L2 output to be posted on L1 (may already be ready)
+      diag.info('L2 output ready, proceeding with prove', { txHash: tx.txHash });
+
+      // L2 output is ready - waitToProve will return immediately
       const { output, withdrawal } = await l1Client.waitToProve({
         receipt,
         targetChain: hemiOpStack,

@@ -429,8 +429,14 @@ export async function executeProveWithdrawal(
 
     return { success: true, txHash: hash, newState: 'BRIDGE_OUT_PROVED' };
   } catch (err) {
-    diag.error('Prove withdrawal failed', { cycleId: cycle.id, error: String(err) });
-    return { success: false, error: String(err) };
+    const errStr = String(err);
+    // L2 output not ready is expected - log at debug and retry later
+    if (errStr.includes('L2_OUTPUT_NOT_READY')) {
+      diag.debug('L2 output not ready, will retry', { cycleId: cycle.id, token });
+      return { success: false };
+    }
+    diag.error('Prove withdrawal failed', { cycleId: cycle.id, error: errStr });
+    return { success: false, error: errStr };
   }
 }
 
