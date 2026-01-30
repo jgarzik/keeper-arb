@@ -1,8 +1,18 @@
 import Database from 'better-sqlite3';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { hostname } from 'os';
 import { join } from 'path';
 import { diag } from './logging.js';
+
+// Get system boot ID (changes on each reboot)
+function getBootId(): string {
+  try {
+    return readFileSync('/proc/sys/kernel/random/boot_id', 'utf-8').trim();
+  } catch {
+    // Fallback: use process start time as pseudo boot ID
+    return `fallback-${process.pid}-${Date.now()}`;
+  }
+}
 
 export type CycleState =
   | 'DETECTED'
@@ -112,13 +122,16 @@ export function getDb(): Database.Database {
 }
 
 function createSchema(db: Database.Database): void {
-  // Check if lock table needs migration (missing hostname column)
+  // Check if lock table needs migration (missing hostname or bootId column)
   // Lock table is transient (no persistent data), safe to drop and recreate
-  const lockInfo = db.prepare(
+  const hasHostname = db.prepare(
     "SELECT COUNT(*) as cnt FROM pragma_table_info('lock') WHERE name='hostname'"
   ).get() as { cnt: number } | undefined;
+  const hasBootId = db.prepare(
+    "SELECT COUNT(*) as cnt FROM pragma_table_info('lock') WHERE name='bootId'"
+  ).get() as { cnt: number } | undefined;
 
-  if (lockInfo && lockInfo.cnt === 0) {
+  if ((hasHostname && hasHostname.cnt === 0) || (hasBootId && hasBootId.cnt === 0)) {
     db.exec('DROP TABLE IF EXISTS lock');
   }
 
@@ -168,7 +181,8 @@ function createSchema(db: Database.Database): void {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       lockedAt TEXT NOT NULL,
       pid INTEGER NOT NULL,
-      hostname TEXT NOT NULL DEFAULT ''
+      hostname TEXT NOT NULL DEFAULT '',
+      bootId TEXT NOT NULL DEFAULT ''
     );
 
     CREATE INDEX IF NOT EXISTS idx_cycles_state ON cycles(state);
@@ -195,15 +209,20 @@ export function acquireLock(): boolean {
   const now = new Date().toISOString();
   const pid = process.pid;
   const host = hostname();
+  const bootId = getBootId();
 
   try {
     d.exec('BEGIN EXCLUSIVE');
     const existing = d.prepare('SELECT * FROM lock WHERE id = 1').get() as
-      { lockedAt: string; pid: number; hostname: string } | undefined;
+      { lockedAt: string; pid: number; hostname: string; bootId: string } | undefined;
 
     if (existing) {
-      // Same host + running process = truly held lock
-      if (existing.hostname === host && isProcessRunning(existing.pid)) {
+      // Same host + same boot + running process = truly held lock
+      const sameHost = existing.hostname === host;
+      const sameBoot = existing.bootId === bootId;
+      const processAlive = isProcessRunning(existing.pid);
+
+      if (sameHost && sameBoot && processAlive) {
         d.exec('ROLLBACK');
         diag.warn('Lock held by running process on same host', {
           pid: existing.pid, hostname: host
@@ -211,18 +230,23 @@ export function acquireLock(): boolean {
         return false;
       }
 
-      // Different host OR dead process = stale lock
+      // Different host OR different boot (reboot) OR dead process = stale lock
+      let reason = 'dead process';
+      if (!sameHost) reason = 'different host';
+      else if (!sameBoot) reason = 'system rebooted';
+
       diag.info('Clearing stale lock', {
         oldPid: existing.pid,
         oldHost: existing.hostname,
-        newHost: host,
-        reason: existing.hostname !== host ? 'different host' : 'dead process'
+        oldBootId: existing.bootId?.slice(0, 8) || 'none',
+        newBootId: bootId.slice(0, 8),
+        reason
       });
       d.prepare('DELETE FROM lock WHERE id = 1').run();
     }
 
-    d.prepare('INSERT INTO lock (id, lockedAt, pid, hostname) VALUES (1, ?, ?, ?)')
-      .run(now, pid, host);
+    d.prepare('INSERT INTO lock (id, lockedAt, pid, hostname, bootId) VALUES (1, ?, ?, ?, ?)')
+      .run(now, pid, host, bootId);
     d.exec('COMMIT');
     diag.info('Lock acquired', { pid, hostname: host });
     return true;
