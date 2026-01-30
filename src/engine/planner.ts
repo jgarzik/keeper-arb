@@ -2,7 +2,7 @@ import { type Clients } from '../wallet.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { ARB_TARGET_TOKENS, type TokenId, requireTokenAddress, getToken, requireTokenDecimals } from '../tokens.js';
 import { getBestPrice } from '../providers/priceAggregator.js';
-import { getUniswapRefPrice, calculateDiscountBps, formatDiscountPercent } from '../providers/uniswapRef.js';
+import { getEthRefPrice, calculateDiscountBps, formatDiscountPercent } from '../providers/refPricing.js';
 import { diag } from '../logging.js';
 import { type Config } from '../config.js';
 import { DEFAULT_TEST_VCRED_AMOUNT } from '../constants/timing.js';
@@ -74,7 +74,7 @@ export async function detectOpportunities(
         continue;
       }
 
-      const ethRefPrice = await getUniswapRefPrice(
+      const ethRefPrice = await getEthRefPrice(
         clients,
         usdcAddress,
         ethTokenAddr,

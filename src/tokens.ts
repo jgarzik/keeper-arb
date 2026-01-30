@@ -25,6 +25,7 @@ export interface TokenMeta {
   bridgeRouteOut?: BridgeRoute; // Hemi → Ethereum
   minSwapVcred?: bigint;
   maxSwapVcredSoftCap?: bigint;
+  isStablecoin?: boolean; // True for USD-pegged tokens (USDC, VUSD, etc.)
 }
 
 export const TOKENS: Record<TokenId, TokenMeta> = {
@@ -37,6 +38,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
         decimals: 6,
       },
     },
+    isStablecoin: true,
   },
   USDC: {
     id: 'USDC',
@@ -52,6 +54,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
       },
     },
     bridgeRouteOut: 'STARGATE_LZ',
+    isStablecoin: true,
   },
   WETH: {
     id: 'WETH',
@@ -142,6 +145,7 @@ export const TOKENS: Record<TokenId, TokenMeta> = {
       },
     },
     bridgeRouteOut: 'HEMI_TUNNEL',
+    isStablecoin: true,
   },
 };
 
@@ -184,4 +188,11 @@ export function validateTokenId(value: string): TokenId {
     throw new Error(`Invalid TokenId: ${value}`);
   }
   return value as TokenId;
+}
+
+/**
+ * Check if a token is a stablecoin (USD-pegged)
+ */
+export function isStablecoin(id: TokenId): boolean {
+  return TOKENS[id].isStablecoin === true;
 }

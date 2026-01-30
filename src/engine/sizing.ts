@@ -1,11 +1,14 @@
 import { type Clients } from '../wallet.js';
 import { type Config } from '../config.js';
-import { type TokenId, requireTokenAddress, requireTokenDecimals, getToken } from '../tokens.js';
+import { type TokenId, requireTokenAddress, requireTokenDecimals, getToken, isStablecoin } from '../tokens.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { getBestPrice } from '../providers/priceAggregator.js';
-import { getUniswapRefPrice } from '../providers/uniswapRef.js';
+import { getEthRefPrice } from '../providers/refPricing.js';
 import { diag } from '../logging.js';
 import { MAX_QUOTE_CALLS, DEFAULT_TEST_VCRED_AMOUNT } from '../constants/timing.js';
+
+// Minimum output ratio for stablecoin swaps (99% - allows 1% slippage max)
+const STABLECOIN_MIN_OUTPUT_RATIO = 99n;
 
 export interface SizingResult {
   token: TokenId;
@@ -37,6 +40,29 @@ async function isProfitableAtSize(
     return null;
   }
 
+  // Sanity check for stablecoins: output value must be >= input value
+  // If swapping $1000 VCRED for stablecoin X, we must get >= $990 of X (1% slippage max)
+  if (isStablecoin(token)) {
+    const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+    const tokenDecimals = requireTokenDecimals(token, CHAIN_ID_HEMI);
+
+    // Normalize to same decimal basis for comparison
+    // vcredIn / 10^vcredDec should be <= hemiOut / 10^tokenDec * (100/99)
+    // => vcredIn * 10^tokenDec * 99 <= hemiOut * 10^vcredDec * 100
+    const vcredNorm = vcredIn * (10n ** BigInt(tokenDecimals)) * STABLECOIN_MIN_OUTPUT_RATIO;
+    const hemiNorm = hemiQuote.amountOut * (10n ** BigInt(vcredDecimals)) * 100n;
+
+    if (hemiNorm < vcredNorm) {
+      diag.debug('Stablecoin sanity check failed', {
+        token,
+        vcredIn: vcredIn.toString(),
+        hemiOut: hemiQuote.amountOut.toString(),
+        reason: 'output value < input value (loss trade)',
+      });
+      return { profitable: false, hemiOut: hemiQuote.amountOut, ethOut: 0n };
+    }
+  }
+
   // Step 2: Quote equivalent USDC -> X on Ethereum
   const vcredDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
   const usdcDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
@@ -45,7 +71,7 @@ async function isProfitableAtSize(
     ? vcredIn / (10n ** BigInt(decimalDiff))
     : vcredIn * (10n ** BigInt(-decimalDiff));
 
-  const ethRefQuote = await getUniswapRefPrice(clients, usdcEth, tokenEth, usdcAmount);
+  const ethRefQuote = await getEthRefPrice(clients, usdcEth, tokenEth, usdcAmount);
   if (!ethRefQuote) {
     return null;
   }

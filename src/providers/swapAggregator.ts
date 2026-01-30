@@ -1,7 +1,7 @@
 import { type Address } from 'viem';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import { type ApiSwapProvider, type ApiSwapQuote } from './swapInterface.js';
-import { sushiApiProvider, zeroXApiProvider, oneDeltaApiProvider } from './dex/index.js';
+import { sushiApiProvider, zeroXApiProvider, oneDeltaApiProvider, paraswapApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
 import { TX_RECEIPT_TIMEOUT_MS } from '../constants/timing.js';
 
@@ -10,6 +10,7 @@ import { TX_RECEIPT_TIMEOUT_MS } from '../constants/timing.js';
 const ALL_PROVIDERS: ApiSwapProvider[] = [
   sushiApiProvider,
   oneDeltaApiProvider,  // Hemi DEX aggregator (uses 0x backend)
+  paraswapApiProvider,  // Ethereum DEX aggregator (best routing for exotic pairs)
   zeroXApiProvider,     // Ethereum DEX aggregator (Curve, Uniswap, Balancer)
   // eisenApiProvider,  // TODO: Enable when API auth is configured
 ];

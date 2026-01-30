@@ -35,7 +35,7 @@ const QUOTER_ABI = [
 // Common fee tiers to try
 const FEE_TIERS = [500, 3000, 10000] as const; // 0.05%, 0.3%, 1%
 
-export interface RefPrice {
+export interface UniswapQuote {
   tokenIn: Address;
   tokenOut: Address;
   amountIn: bigint;
@@ -43,13 +43,13 @@ export interface RefPrice {
   feeTier: number;
 }
 
-// Get reference price from Uniswap V3 on Ethereum (internal)
-async function getUniswapV3Price(
+// Get quote from Uniswap V3 on Ethereum (tries all fee tiers)
+export async function getUniswapV3Quote(
   clients: Clients,
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint
-): Promise<RefPrice | null> {
+): Promise<UniswapQuote | null> {
   const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
 
   // Try each fee tier
@@ -74,7 +74,7 @@ async function getUniswapV3Price(
 
       const amountOut = result[0];
 
-      diag.debug('Uniswap ref price', {
+      diag.debug('Uniswap V3 quote', {
         tokenIn,
         tokenOut,
         amountIn: amountIn.toString(),
@@ -96,83 +96,4 @@ async function getUniswapV3Price(
   }
 
   return null;
-}
-
-// Get reference price - try Uniswap V3 first, then fall back to aggregator
-export async function getUniswapRefPrice(
-  clients: Clients,
-  tokenIn: Address,
-  tokenOut: Address,
-  amountIn: bigint
-): Promise<RefPrice | null> {
-  // Dynamic import to avoid circular dependency
-  const { getBestSwapQuote } = await import('./swapAggregator.js');
-
-  // Try Uniswap V3 first (fastest, no API calls)
-  const uniPrice = await getUniswapV3Price(clients, tokenIn, tokenOut, amountIn);
-  if (uniPrice) {
-    return uniPrice;
-  }
-
-  // Fall back to aggregator (SushiSwap, 0x, etc.)
-  diag.debug('No Uniswap pool, trying aggregator', { tokenIn, tokenOut });
-  const aggQuote = await getBestSwapQuote(
-    clients,
-    CHAIN_ID_ETHEREUM,
-    tokenIn,
-    tokenOut,
-    amountIn
-  );
-
-  if (aggQuote) {
-    diag.debug('Aggregator ref price', {
-      provider: aggQuote.provider,
-      tokenIn,
-      tokenOut,
-      amountIn: amountIn.toString(),
-      amountOut: aggQuote.amountOut.toString(),
-    });
-
-    return {
-      tokenIn,
-      tokenOut,
-      amountIn,
-      amountOut: aggQuote.amountOut,
-      feeTier: 0, // Not applicable for aggregator
-    };
-  }
-
-  diag.warn('No ref price from any source', { tokenIn, tokenOut });
-  return null;
-}
-
-// Compare Hemi price vs Ethereum reference
-// Returns discount in basis points as bigint (positive = cheaper on Hemi)
-export function calculateDiscountBps(
-  hemiAmountOut: bigint,
-  ethRefAmountOut: bigint
-): bigint {
-  if (ethRefAmountOut === 0n) return 0n;
-
-  // If hemiAmountOut > ethRefAmountOut, we're getting more on Hemi = discount
-  return ((hemiAmountOut - ethRefAmountOut) * 10000n) / ethRefAmountOut;
-}
-
-// Format basis points as percentage string (e.g., 150n -> "1.50%")
-export function formatDiscountPercent(bps: bigint): string {
-  const sign = bps < 0n ? '-' : '';
-  const absBps = bps < 0n ? -bps : bps;
-  const whole = absBps / 100n;
-  const frac = (absBps % 100n).toString().padStart(2, '0');
-  return `${sign}${whole}.${frac}%`;
-}
-
-// Legacy wrapper for callers that need a number (for sorting/comparison)
-// Safe for values that fit in JS number precision (< 2^53 basis points)
-export function calculateDiscount(
-  hemiAmountOut: bigint,
-  ethRefAmountOut: bigint
-): number {
-  const bps = calculateDiscountBps(hemiAmountOut, ethRefAmountOut);
-  return Number(bps) / 100; // percentage with 2 decimals
 }

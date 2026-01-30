@@ -506,8 +506,9 @@ function App() {
       return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}`;
     }
 
-    // "Sushi API quote" / "Eisen API quote" / "1delta API quote" - show individual quote
-    if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote' || log.msg === '1delta API quote') {
+    // DEX API quotes - show individual quote
+    if (log.msg === 'Sushi API quote' || log.msg === 'Eisen API quote' || log.msg === '1delta API quote' ||
+        log.msg === 'Paraswap quote' || log.msg === '0x API quote' || log.msg === 'Uniswap V3 quote') {
       const symbolIn = getSymbol(String(data.tokenIn));
       const symbolOut = getSymbol(String(data.tokenOut));
       const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
@@ -538,13 +539,14 @@ function App() {
       return `${vcredIn} VCRED → ${token}`;
     }
 
-    // "Uniswap ref price" - show reference price quote
-    if (log.msg === 'Uniswap ref price') {
+    // Reference price quotes (Uniswap direct or aggregated)
+    if (log.msg === 'Uniswap ref price' || log.msg === 'Eth ref price') {
       const symbolIn = getSymbol(String(data.tokenIn));
       const symbolOut = getSymbol(String(data.tokenOut));
       const amountIn = formatBigIntString(String(data.amountIn), getDecimals(String(data.tokenIn)));
       const amountOut = formatBigIntString(String(data.amountOut), getDecimals(String(data.tokenOut)));
-      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}`;
+      const source = data.source ? ` (${data.source})` : '';
+      return `${amountIn} ${symbolIn} → ${amountOut} ${symbolOut}${source}`;
     }
 
     // "Swap tx submitted" - show swap details
