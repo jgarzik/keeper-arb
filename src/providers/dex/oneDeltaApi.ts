@@ -96,6 +96,7 @@ class OneDeltaApiProvider implements ApiSwapProvider, ApiPriceProvider {
           value: validatedValue,
         },
         spender: validatedSpender,
+        quotedAt: Date.now(),
       };
 
       diag.debug('1delta API quote', {

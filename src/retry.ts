@@ -28,7 +28,8 @@ export function isTransientError(error: unknown): boolean {
     msg.includes('502') ||
     msg.includes('504') ||
     msg.includes('network') ||
-    msg.includes('socket hang up')
+    msg.includes('socket hang up') ||
+    msg.includes('simulation failed')
   );
 }
 

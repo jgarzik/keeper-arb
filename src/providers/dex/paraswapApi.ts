@@ -140,6 +140,7 @@ class ParaswapApiProvider implements ApiSwapProvider {
           value: validatedValue,
         },
         spender: validatedSpender,
+        quotedAt: Date.now(),
       };
 
       diag.debug('Paraswap quote', {

@@ -345,6 +345,16 @@ async function findNewOpportunity(
     return null;
   }
 
+  // Re-check VCRED balance before cycle creation (guard against race conditions)
+  const currentBalance = await getTokenBalance(clients, CHAIN_ID_HEMI, vcredAddress);
+  if (currentBalance < sizing.optimalVcredIn) {
+    diag.debug('Skipping opportunity: insufficient VCRED after sizing', {
+      required: sizing.optimalVcredIn.toString(),
+      available: currentBalance.toString(),
+    });
+    return null;
+  }
+
   // Create new cycle
   const cycle = createCycle(opportunity.token, sizing.optimalVcredIn);
 

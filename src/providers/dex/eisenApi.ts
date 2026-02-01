@@ -117,6 +117,7 @@ class EisenApiProvider implements ApiSwapProvider {
         },
         spender: txTo as Address,
         priceImpact: data.priceImpact,
+        quotedAt: Date.now(),
       };
 
       diag.debug('Eisen API quote', {

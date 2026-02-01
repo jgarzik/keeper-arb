@@ -48,6 +48,8 @@ export interface ApiSwapQuote {
   // For approval
   spender: Address;
   priceImpact?: number;
+  // Timestamp when quote was obtained (for staleness check)
+  quotedAt: number;
 }
 
 // API-based swap provider interface

@@ -3,13 +3,101 @@ import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { requireTokenAddress, requireTokenDecimals, getToken, validateTokenId } from '../tokens.js';
 import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
+import { type ApiSwapQuote } from '../providers/swapInterface.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
 import { type Cycle, type Step, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
 import { HEMI_OPTIMISM_PORTAL } from '../constants/contracts.js';
-import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS } from '../constants/timing.js';
+import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS, MAX_QUOTE_AGE_MS, RETRY_MAX_ATTEMPTS } from '../constants/timing.js';
 import { applyBalanceCheckTolerance } from '../constants/slippage.js';
+import { isTransientError } from '../retry.js';
+import { type Address } from 'viem';
+
+// Parameters for swap execution with retry
+export interface SwapParams {
+  clients: Clients;
+  chainId: number;
+  tokenIn: Address;
+  tokenOut: Address;
+  amountIn: bigint;
+  srcDecimals: number;
+  destDecimals: number;
+}
+
+// Check if a quote is stale (exported for testing)
+export function isQuoteStale(quote: ApiSwapQuote, maxAgeMs: number = MAX_QUOTE_AGE_MS): boolean {
+  return (Date.now() - quote.quotedAt) > maxAgeMs;
+}
+
+// Check if a quote is stale and re-fetch if needed
+async function ensureFreshQuote(
+  params: SwapParams,
+  existingQuote: ApiSwapQuote | null
+): Promise<ApiSwapQuote | null> {
+  if (existingQuote && !isQuoteStale(existingQuote)) {
+    return existingQuote;
+  }
+
+  if (existingQuote) {
+    diag.warn('Quote stale, re-quoting', {
+      age: Date.now() - existingQuote.quotedAt,
+      maxAge: MAX_QUOTE_AGE_MS,
+    });
+  }
+
+  return getBestSwapQuote(
+    params.clients,
+    params.chainId,
+    params.tokenIn,
+    params.tokenOut,
+    params.amountIn,
+    undefined,
+    params.srcDecimals,
+    params.destDecimals
+  );
+}
+
+// Execute swap with retry on transient errors
+async function executeSwapWithRetry(
+  params: SwapParams,
+  initialQuote: ApiSwapQuote
+): Promise<`0x${string}`> {
+  let quote = initialQuote;
+
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      // Ensure quote is fresh before each attempt
+      const freshQuote = await ensureFreshQuote(params, quote);
+      if (!freshQuote) {
+        throw new Error('Failed to get swap quote');
+      }
+      quote = freshQuote;
+
+      return await executeSwap(params.clients, quote);
+    } catch (error) {
+      const isLast = attempt === RETRY_MAX_ATTEMPTS;
+      const isRetryable = isTransientError(error);
+
+      if (isLast || !isRetryable) {
+        throw error;
+      }
+
+      diag.warn('Transient swap error, retrying', {
+        attempt,
+        maxAttempts: RETRY_MAX_ATTEMPTS,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // Backoff before retry
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+      // Force re-quote on retry by clearing quotedAt
+      quote = { ...quote, quotedAt: 0 };
+    }
+  }
+
+  throw new Error('Swap retry loop exited unexpectedly');
+}
 
 // Find existing non-failed step or create new one (idempotent step creation)
 function getOrCreateStep(cycleId: number, stepType: string, chainId: number): Step {
@@ -50,17 +138,26 @@ export async function executeHemiSwap(
     // Get best quote from all providers
     const srcDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
     const destDecimals = requireTokenDecimals(token, CHAIN_ID_HEMI);
+    const swapParams: SwapParams = {
+      clients,
+      chainId: CHAIN_ID_HEMI,
+      tokenIn: vcredAddress,
+      tokenOut: tokenAddress,
+      amountIn: vcredIn,
+      srcDecimals,
+      destDecimals,
+    };
     const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenAddress, vcredIn, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    // Execute swap (includes approval + simulation)
+    // Execute swap with retry on transient errors
     const step = getOrCreateStep(cycle.id, 'HEMI_SWAP', CHAIN_ID_HEMI);
     if (step.status === 'confirmed') {
       return { success: true, txHash: step.txHash as `0x${string}`, newState: 'HEMI_SWAP_DONE' };
     }
-    const txHash = await executeSwap(clients, quote);
+    const txHash = await executeSwapWithRetry(swapParams, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     // Wait for confirmation with timeout
@@ -212,17 +309,26 @@ export async function executeEthSwap(
     // Get best quote from all providers
     const srcDecimals = requireTokenDecimals(token, CHAIN_ID_ETHEREUM);
     const destDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+    const swapParams: SwapParams = {
+      clients,
+      chainId: CHAIN_ID_ETHEREUM,
+      tokenIn: tokenEth,
+      tokenOut: usdcEth,
+      amountIn: tokenBalance,
+      srcDecimals,
+      destDecimals,
+    };
     const quote = await getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenEth, usdcEth, tokenBalance, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    // Execute swap (includes approval + simulation)
+    // Execute swap with retry on transient errors
     const step = getOrCreateStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
     if (step.status === 'confirmed') {
       return { success: true, txHash: step.txHash as `0x${string}`, newState: 'ETH_SWAP_DONE' };
     }
-    const txHash = await executeSwap(clients, quote);
+    const txHash = await executeSwapWithRetry(swapParams, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
@@ -331,17 +437,26 @@ export async function executeCloseSwap(
     // Get best quote from all providers
     const srcDecimals = requireTokenDecimals('USDC', CHAIN_ID_HEMI);
     const destDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+    const swapParams: SwapParams = {
+      clients,
+      chainId: CHAIN_ID_HEMI,
+      tokenIn: usdcHemi,
+      tokenOut: vcredAddress,
+      amountIn: usdcBalance,
+      srcDecimals,
+      destDecimals,
+    };
     const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, usdcHemi, vcredAddress, usdcBalance, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
 
-    // Execute swap (includes approval + simulation)
+    // Execute swap with retry on transient errors
     const step = getOrCreateStep(cycle.id, 'CLOSE_SWAP', CHAIN_ID_HEMI);
     if (step.status === 'confirmed') {
       return { success: true, txHash: step.txHash as `0x${string}`, newState: 'HEMI_CLOSE_SWAP_DONE' };
     }
-    const txHash = await executeSwap(clients, quote);
+    const txHash = await executeSwapWithRetry(swapParams, quote);
     updateStep(step.id, { txHash, status: 'submitted' });
 
     const publicClient = getPublicClient(clients, CHAIN_ID_HEMI);

@@ -115,6 +115,7 @@ class ZeroXApiProvider implements ApiSwapProvider {
           value: validatedValue,
         },
         spender: validatedSpender,
+        quotedAt: Date.now(),
       };
 
       // Log which sources contributed (Curve, Uniswap, etc.)

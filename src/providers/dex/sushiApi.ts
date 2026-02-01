@@ -92,6 +92,7 @@ class SushiApiProvider implements ApiSwapProvider, ApiPriceProvider {
         },
         spender: validatedTo,
         priceImpact: response.priceImpact,
+        quotedAt: Date.now(),
       };
 
       diag.debug('Sushi API quote', {

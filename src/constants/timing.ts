@@ -17,6 +17,9 @@ export const MAX_ACTIONS_PER_LOOP = 3;
 // Maximum quote API calls during sizing binary search
 export const MAX_QUOTE_CALLS = 15;
 
+// Maximum age for swap quotes before re-quoting (30 seconds)
+export const MAX_QUOTE_AGE_MS = 30_000;
+
 // Default VCRED amount for opportunity detection (1000 VCRED units, without decimals)
 export const DEFAULT_TEST_VCRED_AMOUNT = 1000n;
 
