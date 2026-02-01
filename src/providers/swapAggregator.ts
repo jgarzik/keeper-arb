@@ -80,8 +80,7 @@ export async function getBestSwapQuote(
     quotesReceived: validQuotes.length,
   });
 
-  // Add timestamp for staleness tracking
-  return { ...best, quotedAt: Date.now() };
+  return best;
 }
 
 /**

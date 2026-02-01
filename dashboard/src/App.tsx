@@ -475,12 +475,12 @@ function App() {
 
   const formatMonetarySummary = (log: LogEntry): string | null => {
     if (!log.data) return null;
-    const data = log.data as Record<string, any>;
+    const data = log.data as Record<string, unknown>;
 
     // "Opportunity check" - show input → token (Hemi vs Ethereum comparison)
     // Format: "1000 VCRED → WETH (0.005 Hemi vs 0.006 Ethereum)"
     if (log.msg === 'Opportunity check') {
-      const token = data.tokenId || 'X';
+      const token = String(data.tokenId ?? 'X');
       const hemiOut = formatBigIntString(String(data.hemiOut), getDecimals(token));
       const ethOut = formatBigIntString(String(data.ethRefOut), getDecimals(token));
       return `→ ${token} (${hemiOut} Hemi vs ${ethOut} Eth) ${data.discount}`;
@@ -488,7 +488,7 @@ function App() {
 
     // "Profit estimate" - show the full cycle flow
     if (log.msg === 'Profit estimate') {
-      const token = log.token || data.token || 'X';
+      const token = log.token || 'X';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
       const xOut = formatBigIntString(String(data.xOut), getDecimals(token));
       const usdcOut = formatBigIntString(String(data.usdcOut), getDecimals('USDC'));
@@ -526,7 +526,7 @@ function App() {
 
     // "Optimal size found" - show optimal trade sizing result
     if (log.msg === 'Optimal size found') {
-      const token = log.token || data.token || '?';
+      const token = log.token || '?';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
       const hemiOut = formatBigIntString(String(data.hemiOut), getDecimals(token));
       return `${vcredIn} VCRED → ${hemiOut} ${token}`;
@@ -534,7 +534,7 @@ function App() {
 
     // "New opportunity found" - show the opportunity
     if (log.msg === 'New opportunity found') {
-      const token = log.token || data.token || '?';
+      const token = log.token || '?';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
       return `${vcredIn} VCRED → ${token}`;
     }
@@ -903,7 +903,7 @@ function App() {
                 <select
                   className="btn"
                   value={levelFilter}
-                  onChange={(e) => setLevelFilter(e.target.value as any)}
+                  onChange={(e) => setLevelFilter(e.target.value as typeof levelFilter)}
                   style={{ padding: '4px 8px' }}
                 >
                   <option value="all">All Levels</option>
@@ -1049,7 +1049,7 @@ function App() {
 
             {!healthResult && (
               <p style={{ marginTop: '12px', color: '#8b949e', fontSize: '0.85rem' }}>
-                Click "API Self Test" to check provider connectivity
+                Click &quot;API Self Test&quot; to check provider connectivity
               </p>
             )}
           </div>
