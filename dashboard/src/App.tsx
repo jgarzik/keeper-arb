@@ -488,12 +488,12 @@ function App() {
 
     // "Profit estimate" - show the full cycle flow
     if (log.msg === 'Profit estimate') {
+      const token = log.token || data.token || 'X';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
-      const xOut = formatBigIntString(String(data.xOut), getDecimals(data.token));
+      const xOut = formatBigIntString(String(data.xOut), getDecimals(token));
       const usdcOut = formatBigIntString(String(data.usdcOut), getDecimals('USDC'));
       const vcredOut = formatBigIntString(String(data.vcredOut), getDecimals('VCRED'));
       const netProfit = formatBigIntString(String(data.netProfitVcred), getDecimals('VCRED'));
-      const token = data.token || 'X';
       return `${vcredIn} VCRED → ${xOut} ${token} → ${usdcOut} USDC → ${vcredOut} VCRED (net: ${netProfit})`;
     }
 
@@ -526,7 +526,7 @@ function App() {
 
     // "Optimal size found" - show optimal trade sizing result
     if (log.msg === 'Optimal size found') {
-      const token = data.token || '?';
+      const token = log.token || data.token || '?';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
       const hemiOut = formatBigIntString(String(data.hemiOut), getDecimals(token));
       return `${vcredIn} VCRED → ${hemiOut} ${token}`;
@@ -534,7 +534,7 @@ function App() {
 
     // "New opportunity found" - show the opportunity
     if (log.msg === 'New opportunity found') {
-      const token = data.token || '?';
+      const token = log.token || data.token || '?';
       const vcredIn = formatBigIntString(String(data.vcredIn), getDecimals('VCRED'));
       return `${vcredIn} VCRED → ${token}`;
     }
