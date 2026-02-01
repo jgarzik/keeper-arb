@@ -29,7 +29,9 @@ class OneDeltaApiProvider implements ApiSwapProvider, ApiPriceProvider {
     tokenOut: Address,
     amountIn: bigint,
     _sender: Address,
-    _maxSlippage: number
+    _maxSlippage: number,
+    _srcDecimals: number,
+    _destDecimals: number
   ): Promise<ApiSwapQuote | null> {
     if (!this.supportedChains.includes(chainId)) {
       return null;
@@ -123,7 +125,8 @@ class OneDeltaApiProvider implements ApiSwapProvider, ApiPriceProvider {
     amountIn: bigint
   ): Promise<ApiPriceQuote | null> {
     // Use getQuote internally but only return price info
-    const quote = await this.getQuote(chainId, tokenIn, tokenOut, amountIn, '0x0000000000000000000000000000000000000000', 0.01);
+    // Decimals don't matter for 1delta, pass dummy values
+    const quote = await this.getQuote(chainId, tokenIn, tokenOut, amountIn, '0x0000000000000000000000000000000000000000', 0.01, 18, 18);
     if (!quote) return null;
     return {
       provider: this.name,

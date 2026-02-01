@@ -71,7 +71,8 @@ async function isProfitableAtSize(
     ? vcredIn / (10n ** BigInt(decimalDiff))
     : vcredIn * (10n ** BigInt(-decimalDiff));
 
-  const ethRefQuote = await getEthRefPrice(clients, usdcEth, tokenEth, usdcAmount);
+  const tokenDecimals = requireTokenDecimals(token, CHAIN_ID_ETHEREUM);
+  const ethRefQuote = await getEthRefPrice(clients, usdcEth, tokenEth, usdcAmount, usdcDecimals, tokenDecimals);
   if (!ethRefQuote) {
     return null;
   }

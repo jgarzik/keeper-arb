@@ -74,11 +74,14 @@ export async function detectOpportunities(
         continue;
       }
 
+      const tokenDecimals = requireTokenDecimals(tokenId, CHAIN_ID_ETHEREUM);
       const ethRefPrice = await getEthRefPrice(
         clients,
         usdcAddress,
         ethTokenAddr,
-        usdcTestAmount
+        usdcTestAmount,
+        usdcDecimals,
+        tokenDecimals
       );
 
       if (!ethRefPrice) {

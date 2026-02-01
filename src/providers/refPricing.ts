@@ -18,12 +18,14 @@ export async function getEthRefPrice(
   clients: Clients,
   tokenIn: Address,
   tokenOut: Address,
-  amountIn: bigint
+  amountIn: bigint,
+  srcDecimals: number,
+  destDecimals: number
 ): Promise<RefPrice | null> {
   // Query both sources in parallel
   const [uniQuote, aggQuote] = await Promise.all([
     getUniswapV3Quote(clients, tokenIn, tokenOut, amountIn),
-    getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenIn, tokenOut, amountIn),
+    getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenIn, tokenOut, amountIn, undefined, srcDecimals, destDecimals),
   ]);
 
   // Pick the quote that gives MORE tokens (better price)

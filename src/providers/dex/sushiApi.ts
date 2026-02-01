@@ -32,7 +32,9 @@ class SushiApiProvider implements ApiSwapProvider, ApiPriceProvider {
     tokenOut: Address,
     amountIn: bigint,
     sender: Address,
-    maxSlippage: number
+    maxSlippage: number,
+    _srcDecimals: number,
+    _destDecimals: number
   ): Promise<ApiSwapQuote | null> {
     if (!this.supportedChains.includes(chainId)) {
       return null;
@@ -120,13 +122,16 @@ class SushiApiProvider implements ApiSwapProvider, ApiPriceProvider {
     amountIn: bigint
   ): Promise<ApiPriceQuote | null> {
     // Use getQuote internally but only return price info
+    // Decimals don't matter for SushiSwap, pass dummy values
     const quote = await this.getQuote(
       chainId,
       tokenIn,
       tokenOut,
       amountIn,
       '0x0000000000000000000000000000000000000000',
-      0.01
+      0.01,
+      18,
+      18
     );
     if (!quote) return null;
     return {

@@ -44,7 +44,9 @@ class ParaswapApiProvider implements ApiSwapProvider {
     tokenOut: Address,
     amountIn: bigint,
     sender: Address,
-    maxSlippage: number
+    maxSlippage: number,
+    srcDecimals: number,
+    destDecimals: number
   ): Promise<ApiSwapQuote | null> {
     if (!this.supportedChains.includes(chainId)) {
       return null;
@@ -56,8 +58,8 @@ class ParaswapApiProvider implements ApiSwapProvider {
       priceUrl.searchParams.set('srcToken', tokenIn);
       priceUrl.searchParams.set('destToken', tokenOut);
       priceUrl.searchParams.set('amount', amountIn.toString());
-      priceUrl.searchParams.set('srcDecimals', '6'); // Will be overridden by actual token decimals
-      priceUrl.searchParams.set('destDecimals', '6');
+      priceUrl.searchParams.set('srcDecimals', srcDecimals.toString());
+      priceUrl.searchParams.set('destDecimals', destDecimals.toString());
       priceUrl.searchParams.set('side', 'SELL');
       priceUrl.searchParams.set('network', chainId.toString());
 

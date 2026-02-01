@@ -1,7 +1,7 @@
 import { type Clients, getPublicClient, getTokenBalance } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
-import { requireTokenAddress, getToken, validateTokenId } from '../tokens.js';
+import { requireTokenAddress, requireTokenDecimals, getToken, validateTokenId } from '../tokens.js';
 import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
@@ -48,7 +48,9 @@ export async function executeHemiSwap(
 
   try {
     // Get best quote from all providers
-    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenAddress, vcredIn);
+    const srcDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+    const destDecimals = requireTokenDecimals(token, CHAIN_ID_HEMI);
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, vcredAddress, tokenAddress, vcredIn, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
@@ -208,7 +210,9 @@ export async function executeEthSwap(
 
   try {
     // Get best quote from all providers
-    const quote = await getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenEth, usdcEth, tokenBalance);
+    const srcDecimals = requireTokenDecimals(token, CHAIN_ID_ETHEREUM);
+    const destDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_ETHEREUM, tokenEth, usdcEth, tokenBalance, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }
@@ -325,7 +329,9 @@ export async function executeCloseSwap(
 
   try {
     // Get best quote from all providers
-    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, usdcHemi, vcredAddress, usdcBalance);
+    const srcDecimals = requireTokenDecimals('USDC', CHAIN_ID_HEMI);
+    const destDecimals = requireTokenDecimals('VCRED', CHAIN_ID_HEMI);
+    const quote = await getBestSwapQuote(clients, CHAIN_ID_HEMI, usdcHemi, vcredAddress, usdcBalance, undefined, srcDecimals, destDecimals);
     if (!quote) {
       return { success: false, error: 'No swap quote available' };
     }

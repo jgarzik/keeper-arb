@@ -47,7 +47,9 @@ class EisenApiProvider implements ApiSwapProvider {
     tokenOut: Address,
     amountIn: bigint,
     sender: Address,
-    maxSlippage: number
+    maxSlippage: number,
+    _srcDecimals: number,
+    _destDecimals: number
   ): Promise<ApiSwapQuote | null> {
     if (!this.supportedChains.includes(chainId)) {
       return null;

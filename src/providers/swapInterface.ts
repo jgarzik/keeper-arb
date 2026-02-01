@@ -62,7 +62,9 @@ export interface ApiSwapProvider {
     tokenOut: Address,
     amountIn: bigint,
     sender: Address,
-    maxSlippage: number
+    maxSlippage: number,
+    srcDecimals: number,
+    destDecimals: number
   ): Promise<ApiSwapQuote | null>;
 
   // Optional health check

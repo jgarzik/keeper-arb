@@ -27,7 +27,9 @@ export async function getBestSwapQuote(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
-  maxSlippage = DEFAULT_MAX_SLIPPAGE
+  maxSlippage = DEFAULT_MAX_SLIPPAGE,
+  srcDecimals: number,
+  destDecimals: number
 ): Promise<ApiSwapQuote | null> {
   // Filter providers that support this chain
   const providers = ALL_PROVIDERS.filter((p) =>
@@ -42,7 +44,7 @@ export async function getBestSwapQuote(
   // Query all providers in parallel
   const quotes = await Promise.all(
     providers.map((p) =>
-      p.getQuote(chainId, tokenIn, tokenOut, amountIn, clients.address, maxSlippage)
+      p.getQuote(chainId, tokenIn, tokenOut, amountIn, clients.address, maxSlippage, srcDecimals, destDecimals)
     )
   );
 
