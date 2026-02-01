@@ -33,3 +33,7 @@ export const HEALTH_CHECK_CONTRACT_DEGRADED_THRESHOLD_MS = 3000;
 export const RETRY_MAX_ATTEMPTS = 3;
 export const RETRY_BASE_DELAY_MS = 1000;
 export const RETRY_MAX_DELAY_MS = 30_000;
+
+// Max retries for CLOSE_SWAP on-chain failures (tx reverts)
+// These are reconciler-level retries, not within-call retries
+export const MAX_CLOSE_SWAP_RETRIES = 3;

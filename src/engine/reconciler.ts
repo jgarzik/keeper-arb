@@ -6,6 +6,7 @@ import {
   getActiveCycles,
   createCycle,
   updateCycleState,
+  getStepsForCycle,
   type Cycle,
 } from '../db.js';
 import { diag, logMoney } from '../logging.js';
@@ -22,7 +23,7 @@ import {
   checkFinalizationReady,
 } from './steps.js';
 import { recordCycleCompletion } from './accounting.js';
-import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS } from '../constants/timing.js';
+import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS, MAX_CLOSE_SWAP_RETRIES } from '../constants/timing.js';
 import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 
 export interface ReconcilerState {
@@ -268,8 +269,28 @@ async function processStateMachine(
       const result = await executeCloseSwap(clients, config, cycle);
       if (result.success && result.newState) {
         updateCycleState(cycle.id, result.newState);
-      } else if (!result.success) {
-        updateCycleState(cycle.id, 'FAILED', result.error);
+      } else if (!result.success && result.error) {
+        // Count failed CLOSE_SWAP steps to determine retry budget
+        const steps = getStepsForCycle(cycle.id);
+        const failedCloseSwaps = steps.filter(s => s.stepType === 'CLOSE_SWAP' && s.status === 'failed');
+        const retryCount = failedCloseSwaps.length;
+
+        if (retryCount >= MAX_CLOSE_SWAP_RETRIES) {
+          diag.error('CLOSE_SWAP exceeded max retries, failing cycle', {
+            cycleId: cycle.id,
+            retries: retryCount,
+            error: result.error,
+          });
+          updateCycleState(cycle.id, 'FAILED', result.error);
+        } else {
+          diag.warn('CLOSE_SWAP failed, will retry next loop', {
+            cycleId: cycle.id,
+            attempt: retryCount,
+            maxRetries: MAX_CLOSE_SWAP_RETRIES,
+            error: result.error,
+          });
+          // Stay in ON_HEMI_USDC - next loop will create new step and retry
+        }
       }
       return { actionTaken: true };
     }

@@ -464,7 +464,9 @@ export async function executeCloseSwap(
 
     if (receipt.status !== 'success') {
       updateStep(step.id, { status: 'failed', error: `Transaction failed: ${receipt.status}` });
-      return { success: false, txHash, error: `Transaction failed: ${receipt.status}` };
+      // DON'T set newState on revert - let reconciler retry with fresh quote
+      // The failed step remains in DB; reconciler counts failed CLOSE_SWAP steps
+      return { success: false, txHash, error: `Transaction reverted: ${receipt.status}` };
     }
 
     updateStep(step.id, {
