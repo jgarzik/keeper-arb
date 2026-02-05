@@ -23,7 +23,7 @@ import {
   checkFinalizationReady,
 } from './steps.js';
 import { recordCycleCompletion } from './accounting.js';
-import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS, MAX_CLOSE_SWAP_RETRIES } from '../constants/timing.js';
+import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS, MAX_CLOSE_SWAP_RETRIES, MAX_ETH_SWAP_RETRIES } from '../constants/timing.js';
 import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 
 export interface ReconcilerState {
@@ -232,12 +232,32 @@ async function processStateMachine(
     }
 
     case 'ON_ETHEREUM': {
-      // Execute Ethereum swap: X -> USDC
+      // Execute Ethereum swap: X -> USDC (with retry budget)
       const result = await executeEthSwap(clients, config, cycle);
       if (result.success && result.newState) {
         updateCycleState(cycle.id, result.newState);
-      } else if (!result.success) {
-        updateCycleState(cycle.id, 'FAILED', result.error);
+      } else if (!result.success && result.error) {
+        // Count failed ETH_SWAP steps to determine retry budget
+        const steps = getStepsForCycle(cycle.id);
+        const failedEthSwaps = steps.filter(s => s.stepType === 'ETH_SWAP' && s.status === 'failed');
+        const retryCount = failedEthSwaps.length;
+
+        if (retryCount >= MAX_ETH_SWAP_RETRIES) {
+          diag.error('ETH_SWAP exceeded max retries, failing cycle', {
+            cycleId: cycle.id,
+            retries: retryCount,
+            error: result.error,
+          });
+          updateCycleState(cycle.id, 'FAILED', result.error);
+        } else {
+          diag.warn('ETH_SWAP failed, will retry next loop', {
+            cycleId: cycle.id,
+            attempt: retryCount,
+            maxRetries: MAX_ETH_SWAP_RETRIES,
+            error: result.error,
+          });
+          // Stay in ON_ETHEREUM - next loop will create new step and retry
+        }
       }
       return { actionTaken: true };
     }

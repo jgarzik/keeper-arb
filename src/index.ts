@@ -3,6 +3,7 @@ import { initLogging, diag } from './logging.js';
 import { initDb, acquireLock, releaseLock } from './db.js';
 import { initClients } from './wallet.js';
 import { startReconciler, stopReconciler } from './engine/reconciler.js';
+import { recoverStuckCycles } from './engine/recovery.js';
 import { startServer } from './server.js';
 
 let reconcilerTimer: NodeJS.Timeout | null = null;
@@ -57,6 +58,9 @@ async function main(): Promise<void> {
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
+
+  // Recover stuck cycles before starting reconciler
+  await recoverStuckCycles(clients);
 
   // Start dashboard server
   await startServer(config, clients);

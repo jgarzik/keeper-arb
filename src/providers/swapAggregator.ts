@@ -1,22 +1,22 @@
 import { type Address } from 'viem';
 import { type Clients, getPublicClient, getWalletClient, getNextNonce, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import { type ApiSwapProvider, type ApiSwapQuote } from './swapInterface.js';
-import { sushiApiProvider, zeroXApiProvider, oneDeltaApiProvider, paraswapApiProvider } from './dex/index.js';
+import { sushiApiProvider, oneDeltaApiProvider, paraswapApiProvider } from './dex/index.js';
 import { diag } from '../logging.js';
 import { TX_RECEIPT_TIMEOUT_MS } from '../constants/timing.js';
 
 // All available API providers
 // NOTE: Eisen disabled - requires authentication (401 Unauthorized)
+// NOTE: 0x removed - perpetually 429 rate-limited
 const ALL_PROVIDERS: ApiSwapProvider[] = [
   sushiApiProvider,
   oneDeltaApiProvider,  // Hemi DEX aggregator (uses 0x backend)
   paraswapApiProvider,  // Ethereum DEX aggregator (best routing for exotic pairs)
-  zeroXApiProvider,     // Ethereum DEX aggregator (Curve, Uniswap, Balancer)
   // eisenApiProvider,  // TODO: Enable when API auth is configured
 ];
 
-// Default slippage: 0.5%
-const DEFAULT_MAX_SLIPPAGE = 0.005;
+// Default slippage: 1% (increased from 0.5% to reduce on-chain revert risk)
+const DEFAULT_MAX_SLIPPAGE = 0.01;
 
 /**
  * Get best swap quote from all available providers

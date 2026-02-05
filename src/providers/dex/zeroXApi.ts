@@ -5,7 +5,8 @@ import { CHAIN_ID_ETHEREUM } from '../../chains.js';
 import { diag } from '../../logging.js';
 import { withRetry } from '../../retry.js';
 import { validateAddress, validateHex, validateBigInt, validateOptionalBigInt } from './validation.js';
-import { ZERO_X_API_BASE } from '../../constants/api.js';
+// Removed from active providers - perpetually 429 rate-limited
+const ZERO_X_API_BASE = 'https://api.0x.org/swap/allowance-holder';
 import { HEALTH_CHECK_RPC_DEGRADED_THRESHOLD_MS } from '../../constants/timing.js';
 
 // Read API key from Docker secret (falls back to env var for local dev)

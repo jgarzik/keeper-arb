@@ -318,6 +318,13 @@ export function getActiveCycles(): Cycle[] {
   `).all() as Cycle[];
 }
 
+export function getCyclesByState(state: CycleState): Cycle[] {
+  const d = getDb();
+  return d.prepare(`
+    SELECT * FROM cycles WHERE state = ? ORDER BY createdAt
+  `).all(state) as Cycle[];
+}
+
 export function getRecentCycles(limit: number = 50): Cycle[] {
   const d = getDb();
   return d.prepare(`

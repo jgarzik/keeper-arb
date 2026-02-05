@@ -37,3 +37,11 @@ export const RETRY_MAX_DELAY_MS = 30_000;
 // Max retries for CLOSE_SWAP on-chain failures (tx reverts)
 // These are reconciler-level retries, not within-call retries
 export const MAX_CLOSE_SWAP_RETRIES = 3;
+
+// Max retries for ETH_SWAP on-chain failures (tx reverts)
+// These are reconciler-level retries, not within-call retries
+export const MAX_ETH_SWAP_RETRIES = 3;
+
+// CowSwap order polling
+export const COWSWAP_POLL_INTERVAL_MS = 15_000;
+export const COWSWAP_ORDER_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes

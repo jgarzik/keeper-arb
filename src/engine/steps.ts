@@ -1,4 +1,4 @@
-import { type Clients, getPublicClient, getTokenBalance } from '../wallet.js';
+import { type Clients, getPublicClient, getWalletClient, getTokenBalance, getNextNonce, getTokenAllowance, approveToken, safeNonceToNumber } from '../wallet.js';
 import { type Config } from '../config.js';
 import { CHAIN_ID_HEMI, CHAIN_ID_ETHEREUM } from '../chains.js';
 import { requireTokenAddress, requireTokenDecimals, getToken, validateTokenId } from '../tokens.js';
@@ -6,10 +6,13 @@ import { getBestSwapQuote, executeSwap } from '../providers/swapAggregator.js';
 import { type ApiSwapQuote } from '../providers/swapInterface.js';
 import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridge.js';
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
+import { createCowSwapOrder, buildPreSignatureTx, getCowSwapOrderStatus } from '../providers/dex/cowswapApi.js';
+import { cowswapApiProvider } from '../providers/dex/cowswapApi.js';
+import { COWSWAP_VAULT_RELAYER } from '../constants/api.js';
 import { type Cycle, type Step, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
 import { HEMI_OPTIMISM_PORTAL } from '../constants/contracts.js';
-import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS, MAX_QUOTE_AGE_MS, RETRY_MAX_ATTEMPTS } from '../constants/timing.js';
+import { TX_RECEIPT_TIMEOUT_MS, HEMI_CHALLENGE_PERIOD_SECONDS, MAX_QUOTE_AGE_MS, RETRY_MAX_ATTEMPTS, COWSWAP_POLL_INTERVAL_MS, COWSWAP_ORDER_TIMEOUT_MS } from '../constants/timing.js';
 import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 import { isTransientError } from '../retry.js';
 import { type Address } from 'viem';
@@ -277,7 +280,157 @@ export async function executeBridgeOut(
   }
 }
 
-// Execute Ethereum swap: X -> USDC
+// Execute CowSwap presign flow: create order, approve, presign, poll for fill
+async function executeCowSwapFlow(
+  clients: Clients,
+  cycle: Cycle,
+  tokenEth: Address,
+  usdcEth: Address,
+  tokenBalance: bigint,
+  usdcBalanceBefore: bigint,
+  srcDecimals: number,
+  destDecimals: number,
+): Promise<StepResult | null> {
+  const token = validateTokenId(cycle.token);
+
+  // 1. Get CowSwap quote
+  const cowQuote = await cowswapApiProvider.getQuote(
+    CHAIN_ID_ETHEREUM, tokenEth, usdcEth, tokenBalance,
+    clients.address, 0.01, srcDecimals, destDecimals
+  );
+  if (!cowQuote) {
+    diag.info('CowSwap quote unavailable, falling back to aggregator', { cycleId: cycle.id });
+    return null;
+  }
+
+  // 2. Get the full quote response for order creation (re-quote)
+  const quoteBody = {
+    sellToken: tokenEth,
+    buyToken: usdcEth,
+    sellAmountBeforeFee: tokenBalance.toString(),
+    from: clients.address,
+    kind: 'sell' as const,
+    signingScheme: 'presign' as const,
+    receiver: clients.address,
+    appData: '0x0000000000000000000000000000000000000000000000000000000000000000',
+    partiallyFillable: false,
+    sellTokenBalance: 'erc20' as const,
+    buyTokenBalance: 'erc20' as const,
+  };
+
+  const { COWSWAP_API_BASE: cowApiBase } = await import('../constants/api.js');
+  const quoteRes = await fetch(`${cowApiBase}/quote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(quoteBody),
+  });
+  if (!quoteRes.ok) {
+    const errText = await quoteRes.text();
+    diag.warn('CowSwap re-quote failed', { cycleId: cycle.id, error: errText });
+    return null;
+  }
+  const quoteResponse = await quoteRes.json() as {
+    quote: { sellToken: string; buyToken: string; sellAmount: string; buyAmount: string; feeAmount: string; kind: string; partiallyFillable: boolean; validTo: number; appData: string; receiver: string; sellTokenBalance: string; buyTokenBalance: string };
+    from: string;
+    id: number;
+  };
+
+  // Apply 1% slippage to buyAmount for min
+  const buyAmount = BigInt(quoteResponse.quote.buyAmount);
+  const minBuyAmount = (buyAmount * 9900n) / 10000n;
+
+  // 3. Create order
+  const orderUid = await createCowSwapOrder(quoteResponse, clients.address, minBuyAmount);
+  diag.info('CowSwap order created', { cycleId: cycle.id, orderUid, buyAmount: buyAmount.toString(), minBuyAmount: minBuyAmount.toString() });
+
+  // 4. Approve token to vault relayer
+  const allowance = await getTokenAllowance(clients, CHAIN_ID_ETHEREUM, tokenEth, COWSWAP_VAULT_RELAYER as Address);
+  if (allowance < tokenBalance) {
+    diag.info('Approving token for CowSwap vault relayer', { cycleId: cycle.id, token: tokenEth });
+    const approveHash = await approveToken(clients, CHAIN_ID_ETHEREUM, tokenEth, COWSWAP_VAULT_RELAYER as Address, tokenBalance);
+    const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
+    await publicClient.waitForTransactionReceipt({ hash: approveHash, timeout: TX_RECEIPT_TIMEOUT_MS });
+  }
+
+  // 5. Send setPreSignature tx
+  const step = getOrCreateStep(cycle.id, 'ETH_SWAP', CHAIN_ID_ETHEREUM);
+  if (step.status === 'confirmed') {
+    return { success: true, txHash: step.txHash as `0x${string}`, newState: 'ETH_SWAP_DONE' };
+  }
+
+  const preSignTx = buildPreSignatureTx(orderUid);
+  const walletClient = getWalletClient(clients, CHAIN_ID_ETHEREUM);
+  const publicClient = getPublicClient(clients, CHAIN_ID_ETHEREUM);
+  const nonce = await getNextNonce(clients, CHAIN_ID_ETHEREUM);
+  const txHash = await walletClient.sendTransaction({
+    to: preSignTx.to,
+    data: preSignTx.data,
+    value: preSignTx.value,
+    nonce: safeNonceToNumber(nonce),
+  });
+
+  updateStep(step.id, { txHash, status: 'submitted' });
+  diag.info('CowSwap presign tx sent', { cycleId: cycle.id, txHash, orderUid });
+
+  // Wait for presign tx confirmation
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: TX_RECEIPT_TIMEOUT_MS });
+  if (receipt.status !== 'success') {
+    updateStep(step.id, { status: 'failed', error: `Presign tx failed: ${receipt.status}` });
+    return { success: false, txHash, error: `CowSwap presign tx failed: ${receipt.status}` };
+  }
+
+  diag.info('CowSwap presign confirmed, polling for fill', { cycleId: cycle.id, orderUid });
+
+  // 6. Poll for order fill
+  const deadline = Date.now() + COWSWAP_ORDER_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, COWSWAP_POLL_INTERVAL_MS));
+
+    try {
+      const orderInfo = await getCowSwapOrderStatus(orderUid);
+
+      if (orderInfo.status === 'fulfilled') {
+        updateStep(step.id, {
+          status: 'confirmed',
+          gasUsed: receipt.gasUsed,
+          gasPrice: receipt.effectiveGasPrice,
+        });
+
+        const newUsdcBalance = await getTokenBalance(clients, CHAIN_ID_ETHEREUM, usdcEth);
+        const usdcOut = newUsdcBalance - usdcBalanceBefore;
+        updateCycleAmounts(cycle.id, { usdcOut });
+
+        logMoney('ETH_SWAP', {
+          cycleId: cycle.id,
+          token,
+          provider: 'cowswap',
+          tokenIn: tokenBalance.toString(),
+          usdcOut: usdcOut.toString(),
+          txHash,
+          orderUid,
+          chainId: CHAIN_ID_ETHEREUM,
+        });
+
+        return { success: true, txHash, newState: 'ETH_SWAP_DONE' };
+      }
+
+      if (orderInfo.status === 'cancelled' || orderInfo.status === 'expired') {
+        updateStep(step.id, { status: 'failed', error: `CowSwap order ${orderInfo.status}` });
+        return { success: false, txHash, error: `CowSwap order ${orderInfo.status}` };
+      }
+
+      diag.debug('CowSwap order pending', { cycleId: cycle.id, status: orderInfo.status });
+    } catch (pollErr) {
+      diag.warn('CowSwap poll error', { cycleId: cycle.id, error: String(pollErr) });
+    }
+  }
+
+  // Timeout
+  updateStep(step.id, { status: 'failed', error: 'CowSwap order timeout' });
+  return { success: false, txHash, error: 'CowSwap order timeout' };
+}
+
+// Execute Ethereum swap: X -> USDC (CowSwap first, then aggregator fallback)
 export async function executeEthSwap(
   clients: Clients,
   config: Config,
@@ -305,10 +458,28 @@ export async function executeEthSwap(
     return { success: true, newState: 'ETH_SWAP_DONE' };
   }
 
+  const srcDecimals = requireTokenDecimals(token, CHAIN_ID_ETHEREUM);
+  const destDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+
+  // Try CowSwap first (intent-based, no on-chain revert risk)
   try {
-    // Get best quote from all providers
-    const srcDecimals = requireTokenDecimals(token, CHAIN_ID_ETHEREUM);
-    const destDecimals = requireTokenDecimals('USDC', CHAIN_ID_ETHEREUM);
+    const cowResult = await executeCowSwapFlow(
+      clients, cycle, tokenEth, usdcEth, tokenBalance, usdcBalance,
+      srcDecimals, destDecimals,
+    );
+    if (cowResult) {
+      return cowResult;
+    }
+    // null means CowSwap unavailable, fall through to aggregator
+  } catch (err) {
+    diag.warn('CowSwap flow failed, falling back to aggregator', {
+      cycleId: cycle.id,
+      error: String(err),
+    });
+  }
+
+  // Fallback: regular aggregator swap
+  try {
     const swapParams: SwapParams = {
       clients,
       chainId: CHAIN_ID_ETHEREUM,
