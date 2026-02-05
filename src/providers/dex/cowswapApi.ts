@@ -146,7 +146,7 @@ export async function createCowSwapOrder(
     buyToken: q.buyToken,
     sellAmount: q.sellAmount,
     buyAmount: minBuyAmount.toString(),
-    feeAmount: q.feeAmount,
+    feeAmount: '0', // CowSwap v2: fees embedded in sell/buy amounts
     kind: 'sell',
     validTo: q.validTo,
     receiver: q.receiver,

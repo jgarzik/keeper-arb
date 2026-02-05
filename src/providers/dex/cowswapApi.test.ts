@@ -145,6 +145,7 @@ describe('CowSwap API Provider', () => {
       expect(body.signingScheme).toBe('presign');
       expect(body.from).toBe(MOCK_SENDER);
       expect(body.buyAmount).toBe('174339000');
+      expect(body.feeAmount).toBe('0'); // v2 API: fees in amounts
     });
   });
 

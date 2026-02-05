@@ -8,7 +8,7 @@ import { stargateHemiToEth, stargateEthToHemi } from '../providers/stargateBridg
 import { hemiTunnelHemiToEth } from '../providers/hemiTunnel.js';
 import { createCowSwapOrder, buildPreSignatureTx, getCowSwapOrderStatus } from '../providers/dex/cowswapApi.js';
 import { cowswapApiProvider } from '../providers/dex/cowswapApi.js';
-import { COWSWAP_VAULT_RELAYER } from '../constants/api.js';
+import { COWSWAP_VAULT_RELAYER, COWSWAP_API_BASE } from '../constants/api.js';
 import { type Cycle, type Step, createStep, updateStep, updateCycleAmounts, type CycleState, getStepsForCycle } from '../db.js';
 import { diag, logMoney } from '../logging.js';
 import { HEMI_OPTIMISM_PORTAL } from '../constants/contracts.js';
@@ -318,8 +318,7 @@ async function executeCowSwapFlow(
     buyTokenBalance: 'erc20' as const,
   };
 
-  const { COWSWAP_API_BASE: cowApiBase } = await import('../constants/api.js');
-  const quoteRes = await fetch(`${cowApiBase}/quote`, {
+  const quoteRes = await fetch(`${COWSWAP_API_BASE}/quote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(quoteBody),
