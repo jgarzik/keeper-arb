@@ -11,6 +11,10 @@ export const HEMI_CHALLENGE_PERIOD_SECONDS = 86400n;
 // Sleep duration when VCRED balance is too low (60 minutes)
 export const VCRED_SLEEP_DURATION_MS = 60 * 60 * 1000;
 
+// Cooldown between opportunity scans (15 minutes)
+// Keeps API rate usage low while still catching opportunities
+export const OPPORTUNITY_SCAN_COOLDOWN_MS = 15 * 60 * 1000;
+
 // Maximum actions per reconciler loop iteration
 export const MAX_ACTIONS_PER_LOOP = 3;
 

@@ -23,7 +23,7 @@ import {
   checkFinalizationReady,
 } from './steps.js';
 import { recordCycleCompletion } from './accounting.js';
-import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS, MAX_CLOSE_SWAP_RETRIES, MAX_ETH_SWAP_RETRIES } from '../constants/timing.js';
+import { MAX_ACTIONS_PER_LOOP, VCRED_SLEEP_DURATION_MS, MAX_CLOSE_SWAP_RETRIES, MAX_ETH_SWAP_RETRIES, OPPORTUNITY_SCAN_COOLDOWN_MS } from '../constants/timing.js';
 import { applyBalanceCheckTolerance } from '../constants/slippage.js';
 
 export interface ReconcilerState {
@@ -33,6 +33,7 @@ export interface ReconcilerState {
   lastRun: Date | null;
   activeCycles: number;
   vcredSleepUntil: Date | null;
+  lastOpportunityScan: Date | null;
 }
 
 const state: ReconcilerState = {
@@ -42,6 +43,7 @@ const state: ReconcilerState = {
   lastRun: null,
   activeCycles: 0,
   vcredSleepUntil: null,
+  lastOpportunityScan: null,
 };
 
 export function getReconcilerState(): ReconcilerState {
@@ -49,6 +51,7 @@ export function getReconcilerState(): ReconcilerState {
     ...state,
     pausedTokens: new Set(state.pausedTokens),
     vcredSleepUntil: state.vcredSleepUntil,
+    lastOpportunityScan: state.lastOpportunityScan,
   };
 }
 
@@ -123,8 +126,12 @@ export async function reconcile(clients: Clients, config: Config): Promise<void>
       }
     }
 
-    // Step 2: Look for new opportunities if we have capacity (skip if in VCRED sleep)
-    if (actionsThisLoop < MAX_ACTIONS_PER_LOOP && cycles.length < 5 && !state.vcredSleepUntil) {
+    // Step 2: Look for new opportunities if we have capacity
+    // Skip if: in VCRED sleep, or cooldown hasn't elapsed since last scan
+    const scanCooldownElapsed = !state.lastOpportunityScan ||
+      (Date.now() - state.lastOpportunityScan.getTime()) >= OPPORTUNITY_SCAN_COOLDOWN_MS;
+    if (actionsThisLoop < MAX_ACTIONS_PER_LOOP && cycles.length < 5 && !state.vcredSleepUntil && scanCooldownElapsed) {
+      state.lastOpportunityScan = new Date();
       const opportunity = await findNewOpportunity(clients, config);
       if (opportunity) {
         diag.info('New opportunity found', {
