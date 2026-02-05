@@ -237,26 +237,31 @@ async function processStateMachine(
       if (result.success && result.newState) {
         updateCycleState(cycle.id, result.newState);
       } else if (!result.success && result.error) {
-        // Count failed ETH_SWAP steps to determine retry budget
-        const steps = getStepsForCycle(cycle.id);
-        const failedEthSwaps = steps.filter(s => s.stepType === 'ETH_SWAP' && s.status === 'failed');
-        const retryCount = failedEthSwaps.length;
-
-        if (retryCount >= MAX_ETH_SWAP_RETRIES) {
-          diag.error('ETH_SWAP exceeded max retries, failing cycle', {
-            cycleId: cycle.id,
-            retries: retryCount,
-            error: result.error,
-          });
+        // No balance = terminal, no point retrying
+        if (result.error.includes('No token balance')) {
           updateCycleState(cycle.id, 'FAILED', result.error);
         } else {
-          diag.warn('ETH_SWAP failed, will retry next loop', {
-            cycleId: cycle.id,
-            attempt: retryCount,
-            maxRetries: MAX_ETH_SWAP_RETRIES,
-            error: result.error,
-          });
-          // Stay in ON_ETHEREUM - next loop will create new step and retry
+          // Count failed ETH_SWAP steps to determine retry budget
+          const steps = getStepsForCycle(cycle.id);
+          const failedEthSwaps = steps.filter(s => s.stepType === 'ETH_SWAP' && s.status === 'failed');
+          const retryCount = failedEthSwaps.length;
+
+          if (retryCount >= MAX_ETH_SWAP_RETRIES) {
+            diag.error('ETH_SWAP exceeded max retries, failing cycle', {
+              cycleId: cycle.id,
+              retries: retryCount,
+              error: result.error,
+            });
+            updateCycleState(cycle.id, 'FAILED', result.error);
+          } else {
+            diag.warn('ETH_SWAP failed, will retry next loop', {
+              cycleId: cycle.id,
+              attempt: retryCount,
+              maxRetries: MAX_ETH_SWAP_RETRIES,
+              error: result.error,
+            });
+            // Stay in ON_ETHEREUM - next loop will create new step and retry
+          }
         }
       }
       return { actionTaken: true };
